@@ -13,3 +13,4 @@ obj/
 packages/
 *.nupkg
 *.log
+installer/output/
