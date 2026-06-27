@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Reflection;
 using System.Windows.Forms;
 using JianpuEditor.Models;
 using JianpuEditor.Rendering;
@@ -43,10 +44,19 @@ namespace JianpuEditor.Controls
         private bool _editingSecondaryText;
         private readonly List<int> _selectedMeasureIndices = new List<int>();
         private int _measureSelectionAnchor = -1;
+        private IReadOnlyList<PlaybackMeasureSegment> _playbackSegments = new PlaybackMeasureSegment[0];
+        private double _playbackPositionQuarter;
+        private bool _showPlaybackHead;
+        private bool _draggingPlaybackHead;
+        private bool _playbackHeadDragMoved;
+        private int _playbackHeadHitZone = 12;
+        private Bitmap _scoreBitmap;
+        private bool _scoreBitmapDirty = true;
 
         public ScoreCanvas()
         {
             DoubleBuffered = true;
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             BackColor = Color.FromArgb(245, 245, 245);
             BorderStyle = BorderStyle.FixedSingle;
             AutoScroll = true;
@@ -56,14 +66,20 @@ namespace JianpuEditor.Controls
                 BackColor = Color.White,
                 Location = new Point(0, 0)
             };
+            EnableDoubleBuffer(_contentPanel);
             _contentPanel.Paint += OnContentPaint;
             _contentPanel.MouseClick += OnContentClick;
+            _contentPanel.MouseDown += OnContentMouseDown;
+            _contentPanel.MouseMove += OnContentMouseMove;
+            _contentPanel.MouseUp += OnContentMouseUp;
             Controls.Add(_contentPanel);
         }
 
         public event EventHandler<ScoreSelectionChangedEventArgs> SelectionChanged;
 
         public event EventHandler MeasureTextEdited;
+
+        public event Action<double> PlaybackSeeked;
 
         public JianpuScore Score
         {
@@ -281,6 +297,37 @@ namespace JianpuEditor.Controls
             InvalidateSelection();
         }
 
+        public void SetPlaybackPosition(double quarterBeat, bool showHead = true, bool ensureVisible = false)
+        {
+            var oldBounds = GetPlaybackHeadBounds(_playbackPositionQuarter, _showPlaybackHead);
+            _playbackPositionQuarter = Math.Max(0, quarterBeat);
+            _showPlaybackHead = showHead;
+            var newBounds = GetPlaybackHeadBounds(_playbackPositionQuarter, _showPlaybackHead);
+            if (oldBounds == newBounds && !ensureVisible)
+            {
+                return;
+            }
+
+            InvalidatePlaybackRegion(oldBounds, newBounds);
+            if (ensureVisible)
+            {
+                EnsurePlaybackVisibleIfNeeded();
+            }
+        }
+
+        public void HidePlaybackHead()
+        {
+            var oldBounds = GetPlaybackHeadBounds(_playbackPositionQuarter, _showPlaybackHead);
+            _showPlaybackHead = false;
+            _draggingPlaybackHead = false;
+            InvalidatePlaybackRegion(oldBounds, Rectangle.Empty);
+        }
+
+        public double PlaybackPositionQuarter
+        {
+            get { return _playbackPositionQuarter; }
+        }
+
         protected override void OnResize(EventArgs eventargs)
         {
             base.OnResize(eventargs);
@@ -294,18 +341,114 @@ namespace JianpuEditor.Controls
 
         private void OnContentPaint(object sender, PaintEventArgs e)
         {
-            _renderer.Draw(
-                e.Graphics,
-                _score,
-                GetDrawWidth(),
-                _selectedMeasureIndex,
-                _selectedNoteIndex,
-                _selectedInsertIndex,
-                _selectedMeasureIndices);
+            EnsureScoreBitmap();
+            if (_scoreBitmap != null)
+            {
+                e.Graphics.DrawImage(_scoreBitmap, 0, 0);
+            }
+
+            DrawPlaybackHead(e.Graphics);
+        }
+
+        private void DrawPlaybackHead(Graphics graphics)
+        {
+            if (!_showPlaybackHead)
+            {
+                return;
+            }
+
+            var marker = PlaybackLayout.GetMarkerPosition(_playbackSegments, _playbackPositionQuarter);
+            if (!marker.IsVisible)
+            {
+                return;
+            }
+
+            using (var pen = new Pen(Color.FromArgb(220, 57, 120, 215), 2f))
+            using (var brush = new SolidBrush(Color.FromArgb(230, 57, 120, 215)))
+            {
+                graphics.DrawLine(pen, marker.X, marker.Top, marker.X, marker.Bottom);
+                var triangle = new[]
+                {
+                    new Point(marker.X - 7, marker.Top - 2),
+                    new Point(marker.X + 7, marker.Top - 2),
+                    new Point(marker.X, marker.Top + 10)
+                };
+                graphics.FillPolygon(brush, triangle);
+                graphics.DrawPolygon(pen, triangle);
+            }
+        }
+
+        private void OnContentMouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || !_showPlaybackHead)
+            {
+                return;
+            }
+
+            var marker = PlaybackLayout.GetMarkerPosition(_playbackSegments, _playbackPositionQuarter);
+            if (!marker.IsVisible)
+            {
+                return;
+            }
+
+            if (Math.Abs(e.X - marker.X) <= _playbackHeadHitZone)
+            {
+                _draggingPlaybackHead = true;
+                _playbackHeadDragMoved = false;
+                _contentPanel.Capture = true;
+            }
+        }
+
+        private void OnContentMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_draggingPlaybackHead)
+            {
+                UpdatePlaybackCursor(e.Location);
+                return;
+            }
+
+            _playbackHeadDragMoved = true;
+            var beat = PlaybackLayout.MapXToBeat(_playbackSegments, e.X);
+            SetPlaybackPosition(beat, showHead: true, ensureVisible: false);
+            PlaybackSeeked?.Invoke(beat);
+        }
+
+        private void OnContentMouseUp(object sender, MouseEventArgs e)
+        {
+            if (!_draggingPlaybackHead)
+            {
+                return;
+            }
+
+            _draggingPlaybackHead = false;
+            _contentPanel.Capture = false;
+            var beat = PlaybackLayout.MapXToBeat(_playbackSegments, e.X);
+            SetPlaybackPosition(beat, showHead: true, ensureVisible: true);
+            PlaybackSeeked?.Invoke(beat);
+        }
+
+        private void UpdatePlaybackCursor(Point location)
+        {
+            if (!_showPlaybackHead)
+            {
+                _contentPanel.Cursor = Cursors.Default;
+                return;
+            }
+
+            var marker = PlaybackLayout.GetMarkerPosition(_playbackSegments, _playbackPositionQuarter);
+            _contentPanel.Cursor = marker.IsVisible && Math.Abs(location.X - marker.X) <= _playbackHeadHitZone
+                ? Cursors.SizeWE
+                : Cursors.Default;
         }
 
         private void OnContentClick(object sender, MouseEventArgs e)
         {
+            if (_playbackHeadDragMoved)
+            {
+                _playbackHeadDragMoved = false;
+                return;
+            }
+
             if (_inlineEditor != null)
             {
                 var editorBounds = _inlineEditor.Bounds;
@@ -575,8 +718,87 @@ namespace JianpuEditor.Controls
 
         private void InvalidateSelection()
         {
+            MarkScoreBitmapDirty();
             _contentPanel.Invalidate();
-            Invalidate();
+        }
+
+        private void MarkScoreBitmapDirty()
+        {
+            _scoreBitmapDirty = true;
+        }
+
+        private void EnsureScoreBitmap()
+        {
+            if (!_scoreBitmapDirty && _scoreBitmap != null &&
+                _scoreBitmap.Width == _contentPanel.Width && _scoreBitmap.Height == _contentPanel.Height)
+            {
+                return;
+            }
+
+            if (_contentPanel.Width <= 0 || _contentPanel.Height <= 0)
+            {
+                return;
+            }
+
+            _scoreBitmap?.Dispose();
+            _scoreBitmap = new Bitmap(_contentPanel.Width, _contentPanel.Height);
+            using (var graphics = Graphics.FromImage(_scoreBitmap))
+            {
+                graphics.Clear(Color.White);
+                _renderer.Draw(
+                    graphics,
+                    _score,
+                    GetDrawWidth(),
+                    _selectedMeasureIndex,
+                    _selectedNoteIndex,
+                    _selectedInsertIndex,
+                    _selectedMeasureIndices);
+            }
+
+            _scoreBitmapDirty = false;
+        }
+
+        private static void EnableDoubleBuffer(Control control)
+        {
+            typeof(Control).InvokeMember(
+                "DoubleBuffered",
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.SetProperty,
+                null,
+                control,
+                new object[] { true });
+        }
+
+        private Rectangle GetPlaybackHeadBounds(double quarterBeat, bool visible)
+        {
+            if (!visible)
+            {
+                return Rectangle.Empty;
+            }
+
+            var marker = PlaybackLayout.GetMarkerPosition(_playbackSegments, quarterBeat);
+            if (!marker.IsVisible)
+            {
+                return Rectangle.Empty;
+            }
+
+            return new Rectangle(
+                marker.X - _playbackHeadHitZone,
+                marker.Top - 14,
+                _playbackHeadHitZone * 2,
+                marker.Bottom - marker.Top + 16);
+        }
+
+        private void InvalidatePlaybackRegion(Rectangle oldBounds, Rectangle newBounds)
+        {
+            if (!oldBounds.IsEmpty)
+            {
+                _contentPanel.Invalidate(oldBounds);
+            }
+
+            if (!newBounds.IsEmpty)
+            {
+                _contentPanel.Invalidate(newBounds);
+            }
         }
 
         private void UpdateContentSize()
@@ -585,6 +807,41 @@ namespace JianpuEditor.Controls
             var size = _renderer.MeasureScore(_score, drawWidth);
             _contentPanel.Size = new Size(Math.Max(drawWidth, size.Width), Math.Max(360, size.Height));
             AutoScrollMinSize = _contentPanel.Size;
+            _playbackSegments = _renderer.BuildPlaybackSegments(_score, drawWidth);
+            MarkScoreBitmapDirty();
+        }
+
+        private void EnsurePlaybackVisibleIfNeeded()
+        {
+            if (!_showPlaybackHead)
+            {
+                return;
+            }
+
+            var marker = PlaybackLayout.GetMarkerPosition(_playbackSegments, _playbackPositionQuarter);
+            if (!marker.IsVisible)
+            {
+                return;
+            }
+
+            var scrollX = -AutoScrollPosition.X;
+            var scrollY = -AutoScrollPosition.Y;
+            var viewWidth = Math.Max(0, ClientSize.Width - SystemInformation.VerticalScrollBarWidth);
+            var viewHeight = Math.Max(0, ClientSize.Height - SystemInformation.HorizontalScrollBarHeight);
+            const int margin = 72;
+            if (marker.X >= scrollX + margin && marker.X <= scrollX + viewWidth - margin &&
+                marker.Top >= scrollY + margin && marker.Bottom <= scrollY + viewHeight - margin)
+            {
+                return;
+            }
+
+            var targetX = marker.X - viewWidth / 3;
+            var targetY = marker.Top - 24;
+            var maxX = Math.Max(0, _contentPanel.Width - viewWidth);
+            var maxY = Math.Max(0, _contentPanel.Height - viewHeight);
+            AutoScrollPosition = new Point(
+                -Math.Max(0, Math.Min(maxX, targetX)),
+                -Math.Max(0, Math.Min(maxY, targetY)));
         }
 
         private void EnsureMeasures()

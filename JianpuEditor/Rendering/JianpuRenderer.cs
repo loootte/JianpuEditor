@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JianpuEditor.Models;
+using JianpuEditor.Services;
 
 namespace JianpuEditor.Rendering
 {
@@ -28,6 +29,38 @@ namespace JianpuEditor.Rendering
         private readonly Font _rowLabelFont = new Font("Microsoft YaHei", 9f, FontStyle.Regular);
         private readonly Font _noteFont = new Font("Arial", 26f, FontStyle.Bold);
         private readonly Font _secondaryFont = new Font("Arial", 20f, FontStyle.Bold);
+
+        public IReadOnlyList<PlaybackMeasureSegment> BuildPlaybackSegments(JianpuScore score, int width)
+        {
+            var segments = new List<PlaybackMeasureSegment>();
+            if (score?.Measures == null || score.Measures.Count == 0)
+            {
+                return segments;
+            }
+
+            var layout = BuildLayout(score, width, ScoreLayoutOptions.Default);
+            var beat = 0.0;
+            foreach (var measure in layout.Measures)
+            {
+                if (measure.MeasureIndex < 0 || measure.MeasureIndex >= score.Measures.Count)
+                {
+                    continue;
+                }
+
+                var duration = ScoreMidiSchedule.GetMeasureDurationUnits(score.Measures[measure.MeasureIndex]);
+                segments.Add(new PlaybackMeasureSegment
+                {
+                    StartBeat = beat,
+                    DurationBeat = duration,
+                    X = measure.X,
+                    Width = measure.Width,
+                    BlockTop = measure.BlockTop
+                });
+                beat += duration;
+            }
+
+            return segments;
+        }
 
         public Size MeasureScore(JianpuScore score, int maxWidth, ScoreLayoutOptions options = null)
         {

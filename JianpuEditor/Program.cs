@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Windows.Forms;
+using JianpuEditor.Services;
 
 namespace JianpuEditor
 {
@@ -8,9 +10,23 @@ namespace JianpuEditor
         [STAThread]
         private static void Main()
         {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += OnThreadException;
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
+        }
+
+        private static void OnThreadException(object sender, ThreadExceptionEventArgs e)
+        {
+            AppLog.Exception("UI 线程未处理异常", e.Exception);
+        }
+
+        private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            AppLog.Exception("应用程序未处理异常", e.ExceptionObject as Exception);
         }
     }
 }

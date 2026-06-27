@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using JianpuEditor.Models;
-using JianpuEditor.Rendering;
 
 namespace JianpuEditor.Services
 {
@@ -13,13 +12,6 @@ namespace JianpuEditor.Services
         private const int DefaultBpm = 120;
         private const int MinBpm = 30;
         private const int MaxBpm = 300;
-        private const int DefaultTonicMidi = 60;
-        private const int DefaultMeasureBeats = 4;
-        private const int MelodyChannel = 0;
-        private const int ChordChannel = 1;
-        private const int MelodyVelocity = 90;
-        private const int ChordVelocity = 72;
-        private static readonly int[] MajorScaleOffsets = { 0, 2, 4, 5, 7, 9, 11 };
 
         public static void Export(JianpuScore score, string path)
         {
@@ -33,250 +25,34 @@ namespace JianpuEditor.Services
                 throw new ArgumentException("Path is required.", nameof(path));
             }
 
-            var noteEvents = BuildNoteEvents(score);
-            noteEvents.AddRange(BuildChordEvents(score));
+            var schedule = ScoreMidiSchedule.Build(score);
+            var noteEvents = ToTickEvents(schedule.Notes);
             var tempoBpm = ClampBpm(score.Bpm);
             var track = BuildTrack(noteEvents, tempoBpm);
             WriteMidiFile(path, track);
         }
 
-        private static List<MidiNoteEvent> BuildNoteEvents(JianpuScore score)
+        private static List<MidiTickNoteEvent> ToTickEvents(IList<ScheduledMidiNote> notes)
         {
-            var tonicMidi = ParseTonicMidi(score.KeySignature);
-            var suppressed = BuildTieEndSet(score.Ties);
-            var tieExtensionCache = new Dictionary<NotePosition, double>();
-            var events = new List<MidiNoteEvent>();
-            var quarterTime = 0.0;
-
-            var measures = score.Measures ?? new List<JianpuMeasure>();
-            for (var measureIndex = 0; measureIndex < measures.Count; measureIndex++)
+            var events = new List<MidiTickNoteEvent>(notes.Count);
+            foreach (var note in notes)
             {
-                var notes = measures[measureIndex].MelodyNotes;
-                if (notes == null)
+                events.Add(new MidiTickNoteEvent
                 {
-                    continue;
-                }
-
-                for (var noteIndex = 0; noteIndex < notes.Count; noteIndex++)
-                {
-                    var note = notes[noteIndex];
-                    var duration = JianpuRenderer.GetDurationUnits(note);
-                    var position = new NotePosition(measureIndex, noteIndex);
-
-                    if (suppressed.Contains(position))
-                    {
-                        quarterTime += duration;
-                        continue;
-                    }
-
-                    if (note.Type == NoteType.Rest || note.Pitch < 1 || note.Pitch > 7)
-                    {
-                        quarterTime += duration;
-                        continue;
-                    }
-
-                    var totalDuration = duration + GetTieExtension(score, position, tieExtensionCache);
-                    var midiNote = ToMidiNoteNumber(note, tonicMidi);
-                    events.Add(new MidiNoteEvent
-                    {
-                        StartTicks = ToTicks(quarterTime),
-                        DurationTicks = Math.Max(1, ToTicks(totalDuration)),
-                        MidiNote = midiNote,
-                        Channel = MelodyChannel,
-                        Velocity = MelodyVelocity
-                    });
-
-                    quarterTime += duration;
-                }
+                    StartTicks = ToTicks(note.StartQuarter),
+                    DurationTicks = Math.Max(1, ToTicks(note.DurationQuarter)),
+                    MidiNote = note.MidiNote,
+                    Channel = note.Channel,
+                    Velocity = note.Velocity
+                });
             }
 
             return events;
-        }
-
-        private static List<MidiNoteEvent> BuildChordEvents(JianpuScore score)
-        {
-            var events = new List<MidiNoteEvent>();
-            var measures = score.Measures ?? new List<JianpuMeasure>();
-            var measureStart = 0.0;
-
-            for (var measureIndex = 0; measureIndex < measures.Count; measureIndex++)
-            {
-                var measure = measures[measureIndex];
-                var measureDuration = GetMeasureDurationUnits(measure);
-                var chordSymbols = ChordParser.ExtractChordSymbols(measure.SecondaryText);
-                if (chordSymbols.Count > 0)
-                {
-                    var chordDuration = measureDuration / chordSymbols.Count;
-                    for (var chordIndex = 0; chordIndex < chordSymbols.Count; chordIndex++)
-                    {
-                        var chordStart = measureStart + chordDuration * chordIndex;
-                        var midiNotes = ChordParser.ToBlockChordMidiNotes(chordSymbols[chordIndex]);
-                        foreach (var midiNote in midiNotes)
-                        {
-                            events.Add(new MidiNoteEvent
-                            {
-                                StartTicks = ToTicks(chordStart),
-                                DurationTicks = Math.Max(1, ToTicks(chordDuration)),
-                                MidiNote = midiNote,
-                                Channel = ChordChannel,
-                                Velocity = ChordVelocity
-                            });
-                        }
-                    }
-                }
-
-                measureStart += measureDuration;
-            }
-
-            return events;
-        }
-
-        private static double GetMeasureDurationUnits(JianpuMeasure measure)
-        {
-            var duration = 0.0;
-            var notes = measure?.MelodyNotes;
-            if (notes != null)
-            {
-                foreach (var note in notes)
-                {
-                    duration += JianpuRenderer.GetDurationUnits(note);
-                }
-            }
-
-            return duration > 0 ? duration : DefaultMeasureBeats;
-        }
-
-        private static HashSet<NotePosition> BuildTieEndSet(IList<JianpuTie> ties)
-        {
-            var set = new HashSet<NotePosition>();
-            if (ties == null)
-            {
-                return set;
-            }
-
-            foreach (var tie in ties)
-            {
-                set.Add(new NotePosition(tie.EndMeasureIndex, tie.EndNoteIndex));
-            }
-
-            return set;
-        }
-
-        private static double GetTieExtension(
-            JianpuScore score,
-            NotePosition start,
-            IDictionary<NotePosition, double> cache)
-        {
-            if (cache.TryGetValue(start, out var cached))
-            {
-                return cached;
-            }
-
-            var extension = 0.0;
-            var ties = score.Ties ?? new List<JianpuTie>();
-            foreach (var tie in ties)
-            {
-                if (tie.StartMeasureIndex != start.MeasureIndex || tie.StartNoteIndex != start.NoteIndex)
-                {
-                    continue;
-                }
-
-                var endNote = GetNote(score, tie.EndMeasureIndex, tie.EndNoteIndex);
-                if (endNote == null)
-                {
-                    continue;
-                }
-
-                var endPosition = new NotePosition(tie.EndMeasureIndex, tie.EndNoteIndex);
-                var endDuration = JianpuRenderer.GetDurationUnits(endNote);
-                extension += endDuration + GetTieExtension(score, endPosition, cache);
-            }
-
-            cache[start] = extension;
-            return extension;
-        }
-
-        private static JianpuNote GetNote(JianpuScore score, int measureIndex, int noteIndex)
-        {
-            if (score.Measures == null || measureIndex < 0 || measureIndex >= score.Measures.Count)
-            {
-                return null;
-            }
-
-            var notes = score.Measures[measureIndex].MelodyNotes;
-            if (notes == null || noteIndex < 0 || noteIndex >= notes.Count)
-            {
-                return null;
-            }
-
-            return notes[noteIndex];
-        }
-
-        private static int ToMidiNoteNumber(JianpuNote note, int tonicMidi)
-        {
-            var midi = tonicMidi + MajorScaleOffsets[note.Pitch - 1] + note.Octave * 12;
-            return Math.Max(0, Math.Min(127, midi));
         }
 
         private static int ToTicks(double quarterLength)
         {
             return (int)Math.Round(quarterLength * TicksPerQuarter);
-        }
-
-        private static int ParseTonicMidi(string keySignature)
-        {
-            if (string.IsNullOrWhiteSpace(keySignature))
-            {
-                return DefaultTonicMidi;
-            }
-
-            var text = keySignature.Trim();
-            var equalIndex = text.IndexOf('=');
-            if (equalIndex >= 0)
-            {
-                text = text.Substring(equalIndex + 1).Trim();
-            }
-
-            text = text.Replace("大调", string.Empty)
-                .Replace("小调", string.Empty)
-                .Replace("major", string.Empty)
-                .Replace("Major", string.Empty)
-                .Replace("minor", string.Empty)
-                .Replace("Minor", string.Empty)
-                .Trim();
-
-            if (text.Length == 0)
-            {
-                return DefaultTonicMidi;
-            }
-
-            var accidental = 0;
-            if (text.StartsWith("#", StringComparison.Ordinal) || text.StartsWith("＃", StringComparison.Ordinal))
-            {
-                accidental = 1;
-                text = text.Substring(1);
-            }
-            else if (text.StartsWith("b", StringComparison.OrdinalIgnoreCase) || text.StartsWith("♭", StringComparison.Ordinal))
-            {
-                accidental = -1;
-                text = text.Substring(1);
-            }
-
-            var letter = char.ToUpperInvariant(text[0]);
-            int baseMidi;
-            switch (letter)
-            {
-                case 'C': baseMidi = 60; break;
-                case 'D': baseMidi = 62; break;
-                case 'E': baseMidi = 64; break;
-                case 'F': baseMidi = 65; break;
-                case 'G': baseMidi = 67; break;
-                case 'A': baseMidi = 69; break;
-                case 'B': baseMidi = 71; break;
-                default: return DefaultTonicMidi;
-            }
-
-            return Math.Max(0, Math.Min(127, baseMidi + accidental));
         }
 
         private static int ClampBpm(int bpm)
@@ -289,7 +65,7 @@ namespace JianpuEditor.Services
             return Math.Max(MinBpm, Math.Min(MaxBpm, bpm));
         }
 
-        private static byte[] BuildTrack(List<MidiNoteEvent> noteEvents, int tempoBpm)
+        private static byte[] BuildTrack(List<MidiTickNoteEvent> noteEvents, int tempoBpm)
         {
             var ordered = new List<RawMidiEvent>();
             var microsecondsPerQuarter = 60_000_000 / tempoBpm;
@@ -414,38 +190,7 @@ namespace JianpuEditor.Services
             }
         }
 
-        private readonly struct NotePosition : IEquatable<NotePosition>
-        {
-            public NotePosition(int measureIndex, int noteIndex)
-            {
-                MeasureIndex = measureIndex;
-                NoteIndex = noteIndex;
-            }
-
-            public int MeasureIndex { get; }
-
-            public int NoteIndex { get; }
-
-            public bool Equals(NotePosition other)
-            {
-                return MeasureIndex == other.MeasureIndex && NoteIndex == other.NoteIndex;
-            }
-
-            public override bool Equals(object obj)
-            {
-                return obj is NotePosition other && Equals(other);
-            }
-
-            public override int GetHashCode()
-            {
-                unchecked
-                {
-                    return (MeasureIndex * 397) ^ NoteIndex;
-                }
-            }
-        }
-
-        private sealed class MidiNoteEvent
+        private sealed class MidiTickNoteEvent
         {
             public long StartTicks { get; set; }
 

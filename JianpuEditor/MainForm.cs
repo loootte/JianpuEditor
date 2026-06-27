@@ -33,6 +33,9 @@ namespace JianpuEditor
         private int _tieStartMeasureIndex = -1;
         private int _tieStartNoteIndex = -1;
         private Button _tieButton;
+        private Button _playButton;
+        private Button _stopButton;
+        private readonly ScorePlaybackService _playbackService = new ScorePlaybackService();
 
         public MainForm()
         {
@@ -53,6 +56,12 @@ namespace JianpuEditor
 
             _canvas.SelectionChanged += OnCanvasSelectionChanged;
             _canvas.MeasureTextEdited += OnCanvasMeasureTextEdited;
+            _canvas.PlaybackSeeked += OnCanvasPlaybackSeeked;
+            _playbackService.PositionChanged += OnPlaybackPositionChanged;
+            _playbackService.PlaybackFinished += OnPlaybackFinished;
+            _playbackService.PlaybackError += OnPlaybackError;
+            FormClosed += OnFormClosed;
+            AppLog.Info("简谱编辑器启动");
             _canvas.Score = new JianpuScore();
             LoadDemoScore();
             UpdateStatus("就绪 - 点击音符修改，点击音符间隙插入，点击副旋律/歌词行编辑文字");
@@ -190,6 +199,13 @@ namespace JianpuEditor
             panel.Controls.Add(CreateToolButton("保存", () => OnSaveScore(null, EventArgs.Empty)));
             panel.Controls.Add(CreateToolButton("导出PDF", () => OnExportPdf(null, EventArgs.Empty)));
             panel.Controls.Add(CreateToolButton("导出MIDI", () => OnExportMidi(null, EventArgs.Empty)));
+            panel.Controls.Add(CreateSeparator());
+
+            _playButton = CreateToolButton("播放", OnPlayScore);
+            _stopButton = CreateToolButton("停止", OnStopPlayback);
+            _stopButton.Enabled = false;
+            panel.Controls.Add(_playButton);
+            panel.Controls.Add(_stopButton);
             panel.Controls.Add(CreateSeparator());
 
             panel.Controls.Add(new Label { Text = "音符:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
@@ -794,6 +810,11 @@ namespace JianpuEditor
 
         private void RefreshAfterEdit(string message)
         {
+            if (_playbackService.IsPlaying)
+            {
+                StopPlayback();
+            }
+
             var measureCount = Math.Max(1, _canvas.Score.Measures.Count);
             _measureSelector.Maximum = measureCount;
             _measureRangeFrom.Maximum = measureCount;
@@ -809,24 +830,29 @@ namespace JianpuEditor
                 return;
             }
 
+            StopPlayback();
             _canvas.Score.Measures = new System.Collections.Generic.List<JianpuMeasure> { new JianpuMeasure() };
             SelectMeasure(0);
+            ResetPlaybackHead();
             RefreshAfterEdit("谱面已清空");
         }
 
         private void OnNewScore(object sender, EventArgs e)
         {
+            StopPlayback();
             CancelTieMode();
             _canvas.Score = new JianpuScore();
             SyncHeaderFieldsFromScore();
             _currentFilePath = null;
             Text = "简谱编辑器";
             SelectMeasure(0);
+            ResetPlaybackHead();
             RefreshAfterEdit("已新建谱面");
         }
 
         private void OnOpenScore(object sender, EventArgs e)
         {
+            StopPlayback();
             using (var dialog = new OpenFileDialog
             {
                 Filter = "简谱文件 (*.jianpu)|*.jianpu|JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*"
@@ -843,6 +869,7 @@ namespace JianpuEditor
                 _currentFilePath = dialog.FileName;
                 Text = "简谱编辑器 - " + Path.GetFileName(dialog.FileName);
                 SelectMeasure(0);
+                ResetPlaybackHead();
                 RefreshAfterEdit("已打开: " + dialog.FileName);
             }
         }
@@ -935,6 +962,7 @@ namespace JianpuEditor
 
         private void LoadDemoScore()
         {
+            StopPlayback();
             _canvas.Score = new JianpuScore
             {
                 Title = "欢乐颂",
@@ -998,7 +1026,112 @@ namespace JianpuEditor
 
             SyncHeaderFieldsFromScore();
             SelectMeasure(0);
+            ResetPlaybackHead();
             RefreshAfterEdit("已加载示例谱面《欢乐颂》");
+        }
+
+        private void OnPlayScore()
+        {
+            try
+            {
+                _canvas.Score.Bpm = (int)_bpmBox.Value;
+                var startQuarter = _canvas.PlaybackPositionQuarter;
+                AppLog.Info(
+                    "用户点击播放: bpm=" + _canvas.Score.Bpm +
+                    ", startQuarter=" + startQuarter.ToString("0.###") +
+                    ", measures=" + (_canvas.Score.Measures?.Count ?? 0));
+                _playbackService.Play(_canvas.Score, _canvas.Score.Bpm, startQuarter);
+                _playButton.Enabled = false;
+                _stopButton.Enabled = true;
+                _canvas.SetPlaybackPosition(startQuarter, showHead: true, ensureVisible: true);
+                UpdateStatus("正在播放...");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Exception("用户点击播放失败", ex);
+                ShowPlaybackError("播放失败", ex);
+            }
+        }
+
+        private void OnStopPlayback()
+        {
+            StopPlayback();
+            UpdateStatus("播放已停止");
+        }
+
+        private void StopPlayback()
+        {
+            _playbackService.Stop();
+            _playButton.Enabled = true;
+            _stopButton.Enabled = false;
+        }
+
+        private void OnPlaybackPositionChanged(double quarterBeat)
+        {
+            try
+            {
+                _canvas.SetPlaybackPosition(quarterBeat, showHead: true, ensureVisible: false);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Exception("更新播放进度 UI 失败", ex);
+                ShowPlaybackError("播放进度更新失败", ex);
+            }
+        }
+
+        private void OnPlaybackFinished()
+        {
+            _playButton.Enabled = true;
+            _stopButton.Enabled = false;
+            UpdateStatus("播放完成");
+        }
+
+        private void OnCanvasPlaybackSeeked(double quarterBeat)
+        {
+            try
+            {
+                _playbackService.Seek(quarterBeat);
+                if (!_playbackService.IsPlaying)
+                {
+                    _canvas.SetPlaybackPosition(quarterBeat, showHead: true, ensureVisible: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Exception("拖动播放进度失败", ex);
+                ShowPlaybackError("播放跳转失败", ex);
+            }
+        }
+
+        private void OnPlaybackError(Exception ex)
+        {
+            _playButton.Enabled = true;
+            _stopButton.Enabled = false;
+            ShowPlaybackError("播放中断", ex);
+        }
+
+        private static void ShowPlaybackError(string title, Exception ex)
+        {
+            var message = ex == null
+                ? title
+                : title + Environment.NewLine + Environment.NewLine +
+                  ex.Message + Environment.NewLine + Environment.NewLine +
+                  "详细日志:" + Environment.NewLine + AppLog.LogFilePath;
+            MessageBox.Show(message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        private void ResetPlaybackHead()
+        {
+            _playbackService.Prepare(_canvas.Score, 0);
+            _canvas.SetPlaybackPosition(0, showHead: true, ensureVisible: true);
+            _playButton.Enabled = true;
+            _stopButton.Enabled = false;
+        }
+
+        private void OnFormClosed(object sender, FormClosedEventArgs e)
+        {
+            AppLog.Info("简谱编辑器退出");
+            _playbackService.Dispose();
         }
 
         private void SyncHeaderFieldsFromScore()
