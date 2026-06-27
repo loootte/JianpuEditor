@@ -331,7 +331,12 @@ namespace JianpuEditor.Rendering
                 var titleSize = g.MeasureString(title, titleFont);
                 g.DrawString(title, titleFont, Brushes.Black, (width - titleSize.Width) / 2f, titleTop);
 
-                var meta = string.Format("{0}    {1}", score.KeySignature ?? "1=C", score.Tempo ?? string.Empty);
+                var bpm = score.Bpm > 0 ? score.Bpm : 120;
+                var meta = string.Format(
+                    "{0}    {1}    BPM {2}",
+                    score.KeySignature ?? "1=C",
+                    score.Tempo ?? string.Empty,
+                    bpm);
                 if (!string.IsNullOrWhiteSpace(score.Composer))
                 {
                     meta += "    作曲: " + score.Composer;

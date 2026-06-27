@@ -10,6 +10,9 @@ namespace JianpuEditor.Models
 
         public string Tempo { get; set; } = "中速";
 
+        /// <summary>每分钟拍数，用于 MIDI 导出。</summary>
+        public int Bpm { get; set; } = 120;
+
         public string Composer { get; set; } = string.Empty;
 
         public List<JianpuMeasure> Measures { get; set; } = new List<JianpuMeasure> { new JianpuMeasure() };

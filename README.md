@@ -1,6 +1,6 @@
 # 简谱编辑器 (JianpuEditor)
 
-基于 C# WinForms 的简谱编辑工具，支持主旋律编辑、副旋律与歌词、连音线，以及 JSON 保存与 PDF 导出。
+基于 C# WinForms 的简谱编辑工具，支持主旋律编辑、副旋律与歌词、连音线，以及 JSON 保存、PDF 与 MIDI 导出。
 
 ## 功能
 
@@ -14,7 +14,12 @@
 - **小节操作**：新建小节、复制小节范围、多小节选择（Ctrl / Shift + 点击）
 - **文本编辑**：点击副旋律行或歌词行直接编辑；工具栏也可输入当前小节文本
 - **文件**：JSON 格式保存 / 打开
-- **PDF 导出**：A4 纵向，每行 4 小节，标题居中，调号/速度/作曲左对齐，内容溢出时自动缩放
+- **PDF 导出**：A4 纵向，每行 4 小节，标题居中，调号/速度/BPM/作曲左对齐，内容溢出时自动缩放
+- **MIDI 导出**
+  - 主旋律按简谱时值与调号导出
+  - 速度由 BPM 参数控制（与谱面「速度」文字独立）
+  - 副旋律支持和弦标记，以柱式和弦导出（如 `D`、`Bm7`、`G/D`、`Cmaj7`）
+  - 每小节最多 2 个和弦，用空格分隔；1 个和弦占满整小节，2 个和弦各弹半小节
 
 ## 环境要求
 
@@ -36,6 +41,16 @@ dotnet build JianpuEditor.sln -c Release
 .\JianpuEditor\bin\Release\net472\JianpuEditor.exe
 ```
 
+## 安装包
+
+使用 Inno Setup 构建 Windows 安装程序：
+
+```powershell
+.\scripts\build-installer.ps1
+```
+
+输出文件：`installer/output/JianpuEditor-Setup-1.0.0.exe`
+
 ## 基本操作
 
 | 操作 | 说明 |
@@ -46,16 +61,35 @@ dotnet build JianpuEditor.sln -c Release
 | Ctrl + 点击小节 | 多选小节 |
 | Shift + 点击小节 | 范围选择小节 |
 | 连音线 | 点「连音线」→ 选起始音符 → 选结束音符；Esc 取消 |
+| 导出 MIDI | 菜单或工具栏「导出 MIDI」，按 BPM 与和弦标记生成可播放文件 |
 
 启动后自动加载《欢乐颂》示例曲谱，也可点工具栏「示例」重新载入。
 
+## 副旋律和弦标记
+
+副旋律行可填写和弦符号，导出 MIDI 时自动解析并弹奏。示例：
+
+```
+D
+D    Bm7
+G/D  Cmaj7
+```
+
+规则：
+
+- 每小节最多 2 个和弦，用空格分隔（多个空格亦可）
+- 若一行中混有非和弦文字（如「主题 A」），该小节不导出和弦
+- 支持和弦类型：大三、小三、`7`、`maj7`、`m7`、转位（如 `G/D`）等常见写法
+
 ## 曲谱文件格式
 
-曲谱保存为 JSON（`.json`），主要字段：
+曲谱保存为 JSON（`.json` / `.jianpu`），主要字段：
 
-- `Title`、`KeySignature`、`Tempo`、`Composer`
+- `Title`、`KeySignature`、`Tempo`、`Bpm`、`Composer`
 - `Measures[]`：每小节含 `MelodyNotes`、`SecondaryText`、`LyricText`
 - `Ties[]`：连音线（起始/结束小节与音符索引）
+
+其中 `Tempo` 为谱面显示用语（如「中速」），`Bpm` 为 MIDI 导出使用的每分钟拍数（默认 120）。
 
 ## 项目结构
 
@@ -65,13 +99,17 @@ JianpuEditor/
   Controls/ScoreCanvas.cs  # 画布、选择、行内编辑
   Models/                  # 曲谱、小节、音符、连音线
   Rendering/               # 布局、绘制、命中测试
-  Services/                # JSON 读写、PDF 导出、小节复制
+  Services/                # JSON 读写、PDF/MIDI 导出、和弦解析、小节复制
+  installer/               # Inno Setup 安装脚本
+  scripts/                 # 构建与测试脚本
 ```
 
 ## 依赖
 
 - [Newtonsoft.Json](https://www.nuget.org/packages/Newtonsoft.Json) 13.0.3
 - [PDFsharp](https://www.nuget.org/packages/PDFsharp) 6.2.0
+
+MIDI 导出为自研实现，无第三方 MIDI 库。
 
 ## 许可证
 

@@ -16,6 +16,7 @@ namespace JianpuEditor
         private readonly TextBox _titleBox = new TextBox();
         private readonly TextBox _keyBox = new TextBox();
         private readonly TextBox _tempoBox = new TextBox();
+        private readonly NumericUpDown _bpmBox = new NumericUpDown();
         private readonly TextBox _composerBox = new TextBox();
         private readonly TextBox _secondaryBox = new TextBox();
         private readonly TextBox _lyricBox = new TextBox();
@@ -109,6 +110,7 @@ namespace JianpuEditor
             fileMenu.DropDownItems.Add(CreateMenuItem("另存为...", Keys.Control | Keys.Shift | Keys.S, OnSaveScoreAs));
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add(CreateMenuItem("导出 PDF...", Keys.Control | Keys.P, OnExportPdf));
+            fileMenu.DropDownItems.Add(CreateMenuItem("导出 MIDI...", Keys.None, OnExportMidi));
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add(CreateMenuItem("退出", Keys.None, (s, e) => Close()));
 
@@ -130,21 +132,33 @@ namespace JianpuEditor
                 Dock = DockStyle.Top,
                 Height = 88,
                 Padding = new Padding(12, 8, 12, 8),
-                ColumnCount = 8
+                ColumnCount = 10
             };
 
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 15));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 15));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+            _titleBox.Dock = DockStyle.Fill;
+            _keyBox.Dock = DockStyle.Fill;
+            _tempoBox.Dock = DockStyle.Fill;
+            _composerBox.Dock = DockStyle.Fill;
+            _bpmBox.Dock = DockStyle.Fill;
+            _bpmBox.Minimum = 30;
+            _bpmBox.Maximum = 300;
+            _bpmBox.Value = 120;
 
             _titleBox.TextChanged += (s, e) => _canvas.Score.Title = _titleBox.Text;
             _keyBox.TextChanged += (s, e) => _canvas.Score.KeySignature = _keyBox.Text;
             _tempoBox.TextChanged += (s, e) => _canvas.Score.Tempo = _tempoBox.Text;
+            _bpmBox.ValueChanged += (s, e) => _canvas.Score.Bpm = (int)_bpmBox.Value;
             _composerBox.TextChanged += (s, e) => _canvas.Score.Composer = _composerBox.Text;
 
             panel.Controls.Add(new Label { Text = "标题", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 0, 0);
@@ -153,8 +167,10 @@ namespace JianpuEditor
             panel.Controls.Add(_keyBox, 3, 0);
             panel.Controls.Add(new Label { Text = "速度", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 4, 0);
             panel.Controls.Add(_tempoBox, 5, 0);
-            panel.Controls.Add(new Label { Text = "作曲", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 6, 0);
-            panel.Controls.Add(_composerBox, 7, 0);
+            panel.Controls.Add(new Label { Text = "BPM", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 6, 0);
+            panel.Controls.Add(_bpmBox, 7, 0);
+            panel.Controls.Add(new Label { Text = "作曲", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 8, 0);
+            panel.Controls.Add(_composerBox, 9, 0);
 
             Controls.Add(panel);
         }
@@ -173,6 +189,7 @@ namespace JianpuEditor
             panel.Controls.Add(CreateToolButton("打开", () => OnOpenScore(null, EventArgs.Empty)));
             panel.Controls.Add(CreateToolButton("保存", () => OnSaveScore(null, EventArgs.Empty)));
             panel.Controls.Add(CreateToolButton("导出PDF", () => OnExportPdf(null, EventArgs.Empty)));
+            panel.Controls.Add(CreateToolButton("导出MIDI", () => OnExportMidi(null, EventArgs.Empty)));
             panel.Controls.Add(CreateSeparator());
 
             panel.Controls.Add(new Label { Text = "音符:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
@@ -801,10 +818,7 @@ namespace JianpuEditor
         {
             CancelTieMode();
             _canvas.Score = new JianpuScore();
-            _titleBox.Text = _canvas.Score.Title;
-            _keyBox.Text = _canvas.Score.KeySignature;
-            _tempoBox.Text = _canvas.Score.Tempo;
-            _composerBox.Text = _canvas.Score.Composer;
+            SyncHeaderFieldsFromScore();
             _currentFilePath = null;
             Text = "简谱编辑器";
             SelectMeasure(0);
@@ -825,10 +839,7 @@ namespace JianpuEditor
 
                 var score = ScoreFileService.Load(dialog.FileName);
                 _canvas.Score = score;
-                _titleBox.Text = score.Title;
-                _keyBox.Text = score.KeySignature;
-                _tempoBox.Text = score.Tempo;
-                _composerBox.Text = score.Composer;
+                SyncHeaderFieldsFromScore();
                 _currentFilePath = dialog.FileName;
                 Text = "简谱编辑器 - " + Path.GetFileName(dialog.FileName);
                 SelectMeasure(0);
@@ -883,6 +894,7 @@ namespace JianpuEditor
 
                 try
                 {
+                    _canvas.Score.Bpm = (int)_bpmBox.Value;
                     PdfExportService.Export(_canvas.Score, dialog.FileName, Math.Max(Width - 40, 900));
                     UpdateStatus("PDF 已导出: " + dialog.FileName);
                     MessageBox.Show("PDF 导出成功。", "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -894,6 +906,33 @@ namespace JianpuEditor
             }
         }
 
+        private void OnExportMidi(object sender, EventArgs e)
+        {
+            using (var dialog = new SaveFileDialog
+            {
+                Filter = "MIDI 文件 (*.mid)|*.mid",
+                FileName = string.IsNullOrWhiteSpace(_canvas.Score.Title) ? "简谱.mid" : _canvas.Score.Title + ".mid"
+            })
+            {
+                if (dialog.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                try
+                {
+                    _canvas.Score.Bpm = (int)_bpmBox.Value;
+                    MidiExportService.Export(_canvas.Score, dialog.FileName);
+                    UpdateStatus("MIDI 已导出: " + dialog.FileName);
+                    MessageBox.Show("MIDI 导出成功。", "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("MIDI 导出失败: " + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
         private void LoadDemoScore()
         {
             _canvas.Score = new JianpuScore
@@ -901,6 +940,7 @@ namespace JianpuEditor
                 Title = "欢乐颂",
                 KeySignature = "1=C",
                 Tempo = "中速",
+                Bpm = 120,
                 Composer = "贝多芬",
                 Measures = new System.Collections.Generic.List<JianpuMeasure>
                 {
@@ -956,12 +996,18 @@ namespace JianpuEditor
                 }
             };
 
+            SyncHeaderFieldsFromScore();
+            SelectMeasure(0);
+            RefreshAfterEdit("已加载示例谱面《欢乐颂》");
+        }
+
+        private void SyncHeaderFieldsFromScore()
+        {
             _titleBox.Text = _canvas.Score.Title;
             _keyBox.Text = _canvas.Score.KeySignature;
             _tempoBox.Text = _canvas.Score.Tempo;
+            _bpmBox.Value = Math.Max(_bpmBox.Minimum, Math.Min(_bpmBox.Maximum, _canvas.Score.Bpm > 0 ? _canvas.Score.Bpm : 120));
             _composerBox.Text = _canvas.Score.Composer;
-            SelectMeasure(0);
-            RefreshAfterEdit("已加载示例谱面《欢乐颂》");
         }
 
         private void UpdateStatus(string message)

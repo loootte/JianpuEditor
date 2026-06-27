@@ -34,6 +34,7 @@ namespace JianpuEditor.Services
                 Title = token.Value<string>("Title") ?? "未命名乐曲",
                 KeySignature = token.Value<string>("KeySignature") ?? "1=C",
                 Tempo = token.Value<string>("Tempo") ?? "中速",
+                Bpm = token.Value<int?>("Bpm") ?? 120,
                 Composer = token.Value<string>("Composer") ?? string.Empty,
                 Measures = new List<JianpuMeasure>()
             };
