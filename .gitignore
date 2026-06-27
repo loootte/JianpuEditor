@@ -1,0 +1,15 @@
+bin/
+obj/
+.idea/
+.vs/
+*.user
+*.suo
+*.cache
+*.pdb
+*.exe
+*.dll
+[Dd]ebug/
+[Rr]elease/
+packages/
+*.nupkg
+*.log
