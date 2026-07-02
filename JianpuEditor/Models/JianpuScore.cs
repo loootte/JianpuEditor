@@ -15,7 +15,7 @@ namespace JianpuEditor.Models
 
         public string Composer { get; set; } = string.Empty;
 
-        public List<JianpuMeasure> Measures { get; set; } = new List<JianpuMeasure> { new JianpuMeasure() };
+        public List<JianpuMeasure> Measures { get; set; } = new List<JianpuMeasure>();
 
         public List<JianpuTie> Ties { get; set; } = new List<JianpuTie>();
     }

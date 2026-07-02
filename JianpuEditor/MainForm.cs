@@ -18,7 +18,7 @@ namespace JianpuEditor
         private readonly TextBox _tempoBox = new TextBox();
         private readonly NumericUpDown _bpmBox = new NumericUpDown();
         private readonly TextBox _composerBox = new TextBox();
-        private readonly TextBox _secondaryBox = new TextBox();
+        private readonly TextBox _chordBox = new TextBox();
         private readonly TextBox _lyricBox = new TextBox();
         private readonly NumericUpDown _measureSelector = new NumericUpDown();
         private readonly NumericUpDown _measureRangeFrom = new NumericUpDown();
@@ -56,6 +56,7 @@ namespace JianpuEditor
 
             _canvas.SelectionChanged += OnCanvasSelectionChanged;
             _canvas.MeasureTextEdited += OnCanvasMeasureTextEdited;
+            _canvas.ChordMarkersChanged += OnCanvasChordMarkersChanged;
             _canvas.PlaybackSeeked += OnCanvasPlaybackSeeked;
             _playbackService.PositionChanged += OnPlaybackPositionChanged;
             _playbackService.PlaybackFinished += OnPlaybackFinished;
@@ -64,7 +65,7 @@ namespace JianpuEditor
             AppLog.Info("简谱编辑器启动");
             _canvas.Score = new JianpuScore();
             LoadDemoScore();
-            UpdateStatus("就绪 - 点击音符修改，点击音符间隙插入，点击副旋律/歌词行编辑文字");
+            UpdateStatus("就绪 - 点击音符修改，副旋律行可添加/拖动和弦标识，点击歌词行编辑文字");
         }
 
         private static JianpuNote CreateDefaultNote()
@@ -253,10 +254,11 @@ namespace JianpuEditor
             panel.Controls.Add(CreateToolButton("复制小节", DuplicateMeasures));
             panel.Controls.Add(CreateSeparator());
 
-            panel.Controls.Add(new Label { Text = "副旋律:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
-            _secondaryBox.Width = 160;
-            _secondaryBox.TextChanged += (s, e) => ApplyMeasureText();
-            panel.Controls.Add(_secondaryBox);
+            panel.Controls.Add(new Label { Text = "和弦:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
+            _chordBox.Width = 120;
+            _chordBox.TextChanged += (s, e) => ApplyChordMarkerText();
+            panel.Controls.Add(_chordBox);
+            panel.Controls.Add(CreateToolButton("添加和弦", AddChordMarker));
 
             panel.Controls.Add(new Label { Text = "歌词:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
             _lyricBox.Width = 160;
@@ -342,7 +344,7 @@ namespace JianpuEditor
                 return;
             }
 
-            if (e.KeyCode == Keys.Back)
+            if (e.KeyCode == Keys.Back || e.KeyCode == Keys.Delete)
             {
                 DeleteLast();
                 e.Handled = true;
@@ -628,9 +630,30 @@ namespace JianpuEditor
                 return;
             }
 
-            CurrentMeasure.SecondaryText = _secondaryBox.Text;
             CurrentMeasure.LyricText = _lyricBox.Text;
             _canvas.RefreshScore();
+        }
+
+        private void ApplyChordMarkerText()
+        {
+            if (_suppressMeasureTextSync)
+            {
+                return;
+            }
+
+            _canvas.UpdateSelectedChordText(_chordBox.Text);
+        }
+
+        private void AddChordMarker()
+        {
+            if (_canvas.TryAddChordToMeasure(_canvas.SelectedMeasureIndex))
+            {
+                RefreshAfterEdit("已添加和弦标识");
+            }
+            else
+            {
+                UpdateStatus("当前小节最多 " + JianpuMeasure.MaxChordMarkers + " 个和弦标识");
+            }
         }
 
         private void SelectMeasure(int index)
@@ -730,9 +753,27 @@ namespace JianpuEditor
         private void SyncMeasureTextBoxes(int index)
         {
             _suppressMeasureTextSync = true;
-            _secondaryBox.Text = _canvas.Score.Measures[index].SecondaryText ?? string.Empty;
             _lyricBox.Text = _canvas.Score.Measures[index].LyricText ?? string.Empty;
+            SyncChordTextBox();
             _suppressMeasureTextSync = false;
+        }
+
+        private void SyncChordTextBox()
+        {
+            if (_canvas.SelectedChordMarkerIndex >= 0 && _canvas.SelectedChordMeasureIndex >= 0)
+            {
+                var measure = _canvas.Score.Measures[_canvas.SelectedChordMeasureIndex];
+                ChordMarkerService.NormalizeMeasure(measure);
+                if (_canvas.SelectedChordMarkerIndex < measure.ChordMarkers.Count)
+                {
+                    _chordBox.Text = measure.ChordMarkers[_canvas.SelectedChordMarkerIndex].Text ?? string.Empty;
+                    _chordBox.Enabled = true;
+                    return;
+                }
+            }
+
+            _chordBox.Text = string.Empty;
+            _chordBox.Enabled = false;
         }
 
         private void OnCanvasSelectionChanged(object sender, ScoreSelectionChangedEventArgs e)
@@ -753,6 +794,27 @@ namespace JianpuEditor
                 return;
             }
 
+            if (e.HasTieSelected)
+            {
+                var tie = _canvas.Score.Ties[e.TieIndex];
+                UpdateStatus(
+                    "已选中连音线：第 " + (tie.StartMeasureIndex + 1) + " 小节第 " + (tie.StartNoteIndex + 1) +
+                    " 个音符 → 第 " + (tie.EndMeasureIndex + 1) + " 小节第 " + (tie.EndNoteIndex + 1) +
+                    " 个音符，点击「删除」可移除");
+                return;
+            }
+
+            SyncChordTextBox();
+            if (e.HasChordSelected)
+            {
+                var marker = _canvas.Score.Measures[e.ChordMeasureIndex].ChordMarkers[e.ChordMarkerIndex];
+                UpdateStatus(
+                    "已选中和弦标识：第 " + (e.ChordMeasureIndex + 1) + " 小节第 " +
+                    (e.ChordMarkerIndex + 1) + " 个，拍位 " + (marker.BeatPosition + 1) +
+                    "，可拖动 :: 改位置，Delete/「删除」移除");
+                return;
+            }
+
             if (e.SelectedMeasureIndices != null && e.SelectedMeasureIndices.Count > 1)
             {
                 UpdateStatus("已选择第 " + (e.SelectedMeasureIndices.Min() + 1) + " 到第 " + (e.SelectedMeasureIndices.Max() + 1) + " 小节，可点击「复制小节」");
@@ -767,8 +829,13 @@ namespace JianpuEditor
             }
             else
             {
-                UpdateStatus("当前编辑第 " + (e.MeasureIndex + 1) + " 小节，点击副旋律/歌词行可直接编辑文字");
+                UpdateStatus("当前编辑第 " + (e.MeasureIndex + 1) + " 小节，点击副旋律空白拍位添加和弦，点击歌词行编辑文字");
             }
+        }
+
+        private void OnCanvasChordMarkersChanged(object sender, EventArgs e)
+        {
+            SyncChordTextBox();
         }
 
         private void OnCanvasMeasureTextEdited(object sender, EventArgs e)
@@ -783,27 +850,54 @@ namespace JianpuEditor
 
         private void DeleteLast()
         {
+            if (_canvas.SelectedTieIndex >= 0
+                && _canvas.Score.Ties != null
+                && _canvas.SelectedTieIndex < _canvas.Score.Ties.Count)
+            {
+                _canvas.Score.Ties.RemoveAt(_canvas.SelectedTieIndex);
+                _canvas.ClearTieSelection();
+                RefreshAfterEdit("已删除连音线");
+                return;
+            }
+
+            if (_canvas.TryRemoveSelectedChord())
+            {
+                RefreshAfterEdit("已删除和弦标识");
+                return;
+            }
+
             var measure = CurrentMeasure;
             if (_canvas.SelectedNoteIndex >= 0 && _canvas.SelectedNoteIndex < measure.MelodyNotes.Count)
             {
-                measure.MelodyNotes.RemoveAt(_canvas.SelectedNoteIndex);
+                var measureIndex = _canvas.SelectedMeasureIndex;
+                var noteIndex = _canvas.SelectedNoteIndex;
+                measure.MelodyNotes.RemoveAt(noteIndex);
+                TieMaintenanceService.OnNoteRemoved(_canvas.Score, measureIndex, noteIndex);
                 _canvas.ClearMelodySelection();
+                _canvas.ClearTieSelection();
                 RefreshAfterEdit("已删除选中音符");
                 return;
             }
 
             if (measure.MelodyNotes.Count > 0)
             {
-                measure.MelodyNotes.RemoveAt(measure.MelodyNotes.Count - 1);
+                var measureIndex = _canvas.SelectedMeasureIndex;
+                var noteIndex = measure.MelodyNotes.Count - 1;
+                measure.MelodyNotes.RemoveAt(noteIndex);
+                TieMaintenanceService.OnNoteRemoved(_canvas.Score, measureIndex, noteIndex);
                 _canvas.ClearMelodySelection();
+                _canvas.ClearTieSelection();
                 RefreshAfterEdit("已删除当前小节最后一个音符");
                 return;
             }
 
             if (_canvas.Score.Measures.Count > 1)
             {
-                _canvas.Score.Measures.RemoveAt(_canvas.SelectedMeasureIndex);
-                SelectMeasure(Math.Max(0, _canvas.SelectedMeasureIndex - 1));
+                var removedMeasureIndex = _canvas.SelectedMeasureIndex;
+                TieMaintenanceService.OnMeasureRemoved(_canvas.Score, removedMeasureIndex);
+                _canvas.Score.Measures.RemoveAt(removedMeasureIndex);
+                _canvas.ClearTieSelection();
+                SelectMeasure(Math.Max(0, removedMeasureIndex - 1));
                 RefreshAfterEdit("已删除空小节");
             }
         }
@@ -979,7 +1073,11 @@ namespace JianpuEditor
                             new JianpuNote { Pitch = 3 }, new JianpuNote { Pitch = 3 },
                             new JianpuNote { Pitch = 4 }, new JianpuNote { Pitch = 5 }
                         },
-                        SecondaryText = "主题 A",
+                        ChordMarkers = new System.Collections.Generic.List<ChordMarker>
+                        {
+                            new ChordMarker { Text = "C", BeatPosition = 0 },
+                            new ChordMarker { Text = "G", BeatPosition = 2 }
+                        },
                         LyricText = "欢乐女神"
                     },
                     new JianpuMeasure
@@ -989,7 +1087,11 @@ namespace JianpuEditor
                             new JianpuNote { Pitch = 5 }, new JianpuNote { Pitch = 4 },
                             new JianpuNote { Pitch = 3 }, new JianpuNote { Pitch = 2 }
                         },
-                        SecondaryText = "应答",
+                        ChordMarkers = new System.Collections.Generic.List<ChordMarker>
+                        {
+                            new ChordMarker { Text = "G", BeatPosition = 0 },
+                            new ChordMarker { Text = "C", BeatPosition = 2 }
+                        },
                         LyricText = "圣洁美丽"
                     },
                     new JianpuMeasure
@@ -998,7 +1100,10 @@ namespace JianpuEditor
                         {
                             new JianpuNote { Pitch = 1, Dashes = 1 }
                         },
-                        SecondaryText = "延长",
+                        ChordMarkers = new System.Collections.Generic.List<ChordMarker>
+                        {
+                            new ChordMarker { Text = "F", BeatPosition = 0 }
+                        },
                         LyricText = "灿烂光芒"
                     },
                     new JianpuMeasure
@@ -1008,7 +1113,11 @@ namespace JianpuEditor
                             new JianpuNote { Pitch = 1 }, new JianpuNote { Pitch = 2 },
                             new JianpuNote { Pitch = 3 }, new JianpuNote { Pitch = 2, Dashes = 1 }
                         },
-                        SecondaryText = "主题 B",
+                        ChordMarkers = new System.Collections.Generic.List<ChordMarker>
+                        {
+                            new ChordMarker { Text = "C", BeatPosition = 0 },
+                            new ChordMarker { Text = "G", BeatPosition = 2 }
+                        },
                         LyricText = "照大地"
                     },
                     new JianpuMeasure
@@ -1018,12 +1127,16 @@ namespace JianpuEditor
                             new JianpuNote { Pitch = 3, Dotted = true, Underlines = 1 },
                             new JianpuNote { Pitch = 3, Underlines = 1 }
                         },
-                        SecondaryText = "收束",
+                        ChordMarkers = new System.Collections.Generic.List<ChordMarker>
+                        {
+                            new ChordMarker { Text = "C", BeatPosition = 0 }
+                        },
                         LyricText = "我们欢聚"
                     }
                 }
             };
 
+            ChordMarkerService.NormalizeScore(_canvas.Score);
             SyncHeaderFieldsFromScore();
             SelectMeasure(0);
             ResetPlaybackHead();

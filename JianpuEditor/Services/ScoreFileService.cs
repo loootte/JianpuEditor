@@ -21,10 +21,19 @@ namespace JianpuEditor.Services
 
             if (token["Measures"] != null)
             {
-                return token.ToObject<JianpuScore>() ?? CreateEmptyScore();
+                var settings = new JsonSerializerSettings
+                {
+                    // Measures 默认列表若已存在条目，Auto 会追加而非替换，导致读入后多出一节空小节。
+                    ObjectCreationHandling = ObjectCreationHandling.Replace
+                };
+                var score = JsonConvert.DeserializeObject<JianpuScore>(json, settings) ?? CreateEmptyScore();
+                ChordMarkerService.NormalizeScore(score);
+                return score;
             }
 
-            return MigrateLegacyScore(token);
+            var legacyScore = MigrateLegacyScore(token);
+            ChordMarkerService.NormalizeScore(legacyScore);
+            return legacyScore;
         }
 
         private static JianpuScore MigrateLegacyScore(JToken token)

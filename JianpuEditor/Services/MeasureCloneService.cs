@@ -16,7 +16,8 @@ namespace JianpuEditor.Services
             {
                 SecondaryText = source.SecondaryText ?? string.Empty,
                 LyricText = source.LyricText ?? string.Empty,
-                MelodyNotes = new List<JianpuNote>()
+                MelodyNotes = new List<JianpuNote>(),
+                ChordMarkers = new List<ChordMarker>()
             };
 
             if (source.MelodyNotes != null)
@@ -24,6 +25,18 @@ namespace JianpuEditor.Services
                 foreach (var note in source.MelodyNotes)
                 {
                     clone.MelodyNotes.Add(CloneNote(note));
+                }
+            }
+
+            if (source.ChordMarkers != null)
+            {
+                foreach (var marker in source.ChordMarkers)
+                {
+                    clone.ChordMarkers.Add(new ChordMarker
+                    {
+                        Text = marker.Text ?? string.Empty,
+                        BeatPosition = marker.BeatPosition
+                    });
                 }
             }
 

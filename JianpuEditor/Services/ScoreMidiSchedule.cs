@@ -145,20 +145,24 @@ namespace JianpuEditor.Services
             {
                 var measure = measures[measureIndex];
                 var measureDuration = GetMeasureDurationUnits(measure);
-                var chordSymbols = ChordParser.ExtractChordSymbols(measure.SecondaryText);
+                var chordSymbols = ChordParser.ExtractScheduledChords(measure);
                 if (chordSymbols.Count > 0)
                 {
-                    var chordDuration = measureDuration / chordSymbols.Count;
                     for (var chordIndex = 0; chordIndex < chordSymbols.Count; chordIndex++)
                     {
-                        var chordStart = measureStart + chordDuration * chordIndex;
-                        var midiNotes = ChordParser.ToBlockChordMidiNotes(chordSymbols[chordIndex]);
+                        var chord = chordSymbols[chordIndex];
+                        var chordStart = measureStart + chord.BeatPosition;
+                        var chordEnd = chordIndex + 1 < chordSymbols.Count
+                            ? measureStart + chordSymbols[chordIndex + 1].BeatPosition
+                            : measureStart + measureDuration;
+                        var chordDuration = Math.Max(0.01, chordEnd - chordStart);
+                        var midiNotes = ChordParser.ToBlockChordMidiNotes(chord.Symbol);
                         foreach (var midiNote in midiNotes)
                         {
                             events.Add(new ScheduledMidiNote
                             {
                                 StartQuarter = chordStart,
-                                DurationQuarter = Math.Max(0.01, chordDuration),
+                                DurationQuarter = chordDuration,
                                 MidiNote = midiNote,
                                 Channel = ChordChannel,
                                 Velocity = ChordVelocity

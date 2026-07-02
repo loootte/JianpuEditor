@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using JianpuEditor.Models;
@@ -72,6 +73,12 @@ namespace JianpuEditor.Rendering
             return new Size(Math.Max(maxWidth, layout.TotalWidth + MarginLeft), Math.Max(320, height));
         }
 
+        public IReadOnlyList<MeasureLayout> GetMeasureLayouts(JianpuScore score, int width, ScoreLayoutOptions layoutOptions = null)
+        {
+            layoutOptions = layoutOptions ?? ScoreLayoutOptions.Default;
+            return BuildLayout(score, width, layoutOptions).Measures;
+        }
+
         public void Draw(
             Graphics graphics,
             JianpuScore score,
@@ -80,6 +87,9 @@ namespace JianpuEditor.Rendering
             int selectedNoteIndex = -1,
             int selectedInsertIndex = -1,
             IReadOnlyList<int> selectedMeasureIndices = null,
+            int selectedTieIndex = -1,
+            int selectedChordMeasureIndex = -1,
+            int selectedChordMarkerIndex = -1,
             ScoreLayoutOptions layoutOptions = null)
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -90,7 +100,18 @@ namespace JianpuEditor.Rendering
             var layout = BuildLayout(score, width, layoutOptions);
             DrawHeader(graphics, score, width, layoutOptions);
             DrawRowLabels(graphics, layout);
-            DrawStaff(graphics, score, layout, selectedMeasureIndex, selectedNoteIndex, selectedInsertIndex, selectedMeasureIndices);
+            DrawStaff(
+                graphics,
+                score,
+                layout,
+                selectedMeasureIndex,
+                selectedNoteIndex,
+                selectedInsertIndex,
+                selectedMeasureIndices,
+                selectedTieIndex,
+                selectedChordMeasureIndex,
+                selectedChordMarkerIndex,
+                layoutOptions);
         }
 
         public static double GetDurationUnits(JianpuNote note)
@@ -138,6 +159,18 @@ namespace JianpuEditor.Rendering
                 return barHit;
             }
 
+            var tieHit = HitTestTies(score, layout, point);
+            if (tieHit != null)
+            {
+                return tieHit;
+            }
+
+            var chordHit = HitTestChordMarkers(score, layout, point);
+            if (chordHit != null)
+            {
+                return chordHit;
+            }
+
             foreach (var measure in layout.Measures)
             {
                 var blockBounds = new Rectangle(measure.X, measure.BlockTop, measure.Width, StaffBlockHeight);
@@ -159,12 +192,7 @@ namespace JianpuEditor.Rendering
 
                 if (point.Y < secondaryBottom)
                 {
-                    return new ScoreHitResult
-                    {
-                        HitType = ScoreHitType.SecondaryText,
-                        MeasureIndex = measure.MeasureIndex,
-                        Bounds = GetTextCellBounds(measure, secondaryTop, SecondaryRowHeight)
-                    };
+                    return HitTestSecondaryRow(score, measure, point, secondaryTop);
                 }
 
                 if (point.Y < lyricBottom)
@@ -324,7 +352,7 @@ namespace JianpuEditor.Rendering
             var bitmap = new Bitmap(size.Width, size.Height);
             using (var g = Graphics.FromImage(bitmap))
             {
-                Draw(g, score, width, -1, -1, -1, null, options);
+                Draw(g, score, width, -1, -1, -1, null, -1, -1, -1, options);
             }
 
             return bitmap;
@@ -408,8 +436,13 @@ namespace JianpuEditor.Rendering
             int selectedMeasureIndex,
             int selectedNoteIndex,
             int selectedInsertIndex,
-            IReadOnlyList<int> selectedMeasureIndices)
+            IReadOnlyList<int> selectedMeasureIndices,
+            int selectedTieIndex,
+            int selectedChordMeasureIndex,
+            int selectedChordMarkerIndex,
+            ScoreLayoutOptions layoutOptions)
         {
+            layoutOptions = layoutOptions ?? ScoreLayoutOptions.Default;
             foreach (var measure in layout.Measures)
             {
                 var measureData = score.Measures[measure.MeasureIndex];
@@ -434,12 +467,15 @@ namespace JianpuEditor.Rendering
                 }
 
                 DrawMelodyRow(g, measureData, measure, selectedMeasureIndex, selectedNoteIndex, selectedInsertIndex);
-                DrawSecondaryTextRow(
+                DrawChordMarkersRow(
                     g,
-                    measureData.SecondaryText,
-                    GetTextCellBounds(measure, GetSecondaryRowTop(measure), SecondaryRowHeight),
+                    measureData,
+                    measure,
                     isSelectedMeasure,
-                    string.IsNullOrWhiteSpace(measureData.SecondaryText));
+                    selectedMeasureIndex,
+                    selectedChordMeasureIndex,
+                    selectedChordMarkerIndex,
+                    layoutOptions);
                 DrawLyricRow(
                     g,
                     measureData.LyricText,
@@ -450,68 +486,211 @@ namespace JianpuEditor.Rendering
                 DrawBarLine(g, measure.BarLineX, measure.BlockTop, StaffBlockHeight);
             }
 
-            DrawTies(g, score, layout);
+            DrawTies(g, score, layout, selectedTieIndex);
         }
 
-        private void DrawTies(Graphics g, JianpuScore score, ScoreLayout layout)
+        private ScoreHitResult HitTestTies(JianpuScore score, ScoreLayout layout, Point point)
+        {
+            if (score?.Ties == null || score.Ties.Count == 0)
+            {
+                return null;
+            }
+
+            const float hitThreshold = 8f;
+            for (var i = score.Ties.Count - 1; i >= 0; i--)
+            {
+                if (!TryGetTieGeometry(score, layout, score.Ties[i], out var geometry))
+                {
+                    continue;
+                }
+
+                if (!IsPointNearTie(point, geometry, hitThreshold))
+                {
+                    continue;
+                }
+
+                var bounds = Rectangle.FromLTRB(
+                    (int)Math.Floor(geometry.X1) - 4,
+                    (int)Math.Floor(geometry.ArchTop) - 4,
+                    (int)Math.Ceiling(geometry.X2) + 4,
+                    (int)Math.Ceiling(geometry.BaseY) + 4);
+                return new ScoreHitResult
+                {
+                    HitType = ScoreHitType.Tie,
+                    TieIndex = i,
+                    MeasureIndex = score.Ties[i].StartMeasureIndex,
+                    Bounds = bounds
+                };
+            }
+
+            return null;
+        }
+
+        private void DrawTies(Graphics g, JianpuScore score, ScoreLayout layout, int selectedTieIndex)
         {
             if (score.Ties == null || score.Ties.Count == 0)
             {
                 return;
             }
 
-            foreach (var tie in score.Ties)
+            for (var i = 0; i < score.Ties.Count; i++)
             {
-                var startLayout = FindMeasureLayout(layout, tie.StartMeasureIndex);
-                var endLayout = FindMeasureLayout(layout, tie.EndMeasureIndex);
-                if (startLayout == null || endLayout == null)
+                if (!TryGetTieGeometry(score, layout, score.Ties[i], out var geometry))
                 {
                     continue;
                 }
 
-                if (tie.StartMeasureIndex < 0 || tie.StartMeasureIndex >= score.Measures.Count
-                    || tie.EndMeasureIndex < 0 || tie.EndMeasureIndex >= score.Measures.Count)
+                var isSelected = i == selectedTieIndex;
+                if (isSelected)
                 {
-                    continue;
+                    using (var brush = new SolidBrush(Color.FromArgb(48, 66, 133, 244)))
+                    using (var path = new GraphicsPath())
+                    {
+                        path.AddBezier(
+                            geometry.X1,
+                            geometry.BaseY,
+                            geometry.X1,
+                            geometry.ArchTop,
+                            geometry.X2,
+                            geometry.ArchTop,
+                            geometry.X2,
+                            geometry.BaseY);
+                        g.FillPath(brush, path);
+                    }
                 }
 
-                var startMeasure = score.Measures[tie.StartMeasureIndex];
-                var endMeasure = score.Measures[tie.EndMeasureIndex];
-                if (startMeasure.MelodyNotes == null || endMeasure.MelodyNotes == null
-                    || tie.StartNoteIndex < 0 || tie.StartNoteIndex >= startMeasure.MelodyNotes.Count
-                    || tie.EndNoteIndex < 0 || tie.EndNoteIndex >= endMeasure.MelodyNotes.Count)
+                var color = isSelected ? Color.FromArgb(255, 41, 98, 255) : Color.Black;
+                var width = isSelected ? 3f : 2f;
+                using (var pen = new Pen(color, width))
                 {
-                    continue;
-                }
+                    if (isSelected)
+                    {
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+                    }
 
-                var startScale = startLayout.MelodyScale;
-                var endScale = endLayout.MelodyScale;
-                var startMinWidth = startScale < 0.999
-                    ? Math.Max(6, (int)Math.Round(MinNoteWidth * startScale))
-                    : MinNoteWidth;
-                var endMinWidth = endScale < 0.999
-                    ? Math.Max(6, (int)Math.Round(MinNoteWidth * endScale))
-                    : MinNoteWidth;
-                var startCount = startMeasure.MelodyNotes.Count;
-                var endCount = endMeasure.MelodyNotes.Count;
-
-                GetNoteDrawBounds(startLayout, tie.StartNoteIndex, startCount, startScale, startMinWidth, out var startX, out var startWidth);
-                GetNoteDrawBounds(endLayout, tie.EndNoteIndex, endCount, endScale, endMinWidth, out var endX, out var endWidth);
-
-                var x1 = GetNoteHeadCenterX(startX, startWidth);
-                var x2 = GetNoteHeadCenterX(endX, endWidth);
-                if (x2 <= x1)
-                {
-                    continue;
-                }
-
-                var baseY = startLayout.BlockTop + 8f;
-                var archTop = startLayout.BlockTop - 6f;
-                using (var pen = new Pen(Color.Black, 2f))
-                {
-                    g.DrawBezier(pen, x1, baseY, x1, archTop, x2, archTop, x2, baseY);
+                    g.DrawBezier(
+                        pen,
+                        geometry.X1,
+                        geometry.BaseY,
+                        geometry.X1,
+                        geometry.ArchTop,
+                        geometry.X2,
+                        geometry.ArchTop,
+                        geometry.X2,
+                        geometry.BaseY);
                 }
             }
+        }
+
+        private static bool TryGetTieGeometry(JianpuScore score, ScoreLayout layout, JianpuTie tie, out TieGeometry geometry)
+        {
+            geometry = default;
+            var startLayout = FindMeasureLayout(layout, tie.StartMeasureIndex);
+            var endLayout = FindMeasureLayout(layout, tie.EndMeasureIndex);
+            if (startLayout == null || endLayout == null)
+            {
+                return false;
+            }
+
+            if (tie.StartMeasureIndex < 0 || tie.StartMeasureIndex >= score.Measures.Count
+                || tie.EndMeasureIndex < 0 || tie.EndMeasureIndex >= score.Measures.Count)
+            {
+                return false;
+            }
+
+            var startMeasure = score.Measures[tie.StartMeasureIndex];
+            var endMeasure = score.Measures[tie.EndMeasureIndex];
+            if (startMeasure.MelodyNotes == null || endMeasure.MelodyNotes == null
+                || tie.StartNoteIndex < 0 || tie.StartNoteIndex >= startMeasure.MelodyNotes.Count
+                || tie.EndNoteIndex < 0 || tie.EndNoteIndex >= endMeasure.MelodyNotes.Count)
+            {
+                return false;
+            }
+
+            var startScale = startLayout.MelodyScale;
+            var endScale = endLayout.MelodyScale;
+            var startMinWidth = startScale < 0.999
+                ? Math.Max(6, (int)Math.Round(MinNoteWidth * startScale))
+                : MinNoteWidth;
+            var endMinWidth = endScale < 0.999
+                ? Math.Max(6, (int)Math.Round(MinNoteWidth * endScale))
+                : MinNoteWidth;
+            var startCount = startMeasure.MelodyNotes.Count;
+            var endCount = endMeasure.MelodyNotes.Count;
+
+            GetNoteDrawBounds(startLayout, tie.StartNoteIndex, startCount, startScale, startMinWidth, out var startX, out var startWidth);
+            GetNoteDrawBounds(endLayout, tie.EndNoteIndex, endCount, endScale, endMinWidth, out var endX, out var endWidth);
+
+            var x1 = GetNoteHeadCenterX(startX, startWidth);
+            var x2 = GetNoteHeadCenterX(endX, endWidth);
+            if (x2 <= x1)
+            {
+                return false;
+            }
+
+            geometry = new TieGeometry
+            {
+                X1 = x1,
+                X2 = x2,
+                BaseY = startLayout.BlockTop + 8f,
+                ArchTop = startLayout.BlockTop - 6f
+            };
+            return true;
+        }
+
+        private static bool IsPointNearTie(Point point, TieGeometry geometry, float threshold)
+        {
+            if (point.X < geometry.X1 - threshold || point.X > geometry.X2 + threshold
+                || point.Y < geometry.ArchTop - threshold || point.Y > geometry.BaseY + threshold)
+            {
+                return false;
+            }
+
+            const int steps = 24;
+            var thresholdSq = threshold * threshold;
+            for (var i = 0; i <= steps; i++)
+            {
+                var t = (float)i / steps;
+                var curvePoint = EvaluateCubicBezier(
+                    t,
+                    geometry.X1,
+                    geometry.BaseY,
+                    geometry.X1,
+                    geometry.ArchTop,
+                    geometry.X2,
+                    geometry.ArchTop,
+                    geometry.X2,
+                    geometry.BaseY);
+                var dx = point.X - curvePoint.X;
+                var dy = point.Y - curvePoint.Y;
+                if (dx * dx + dy * dy <= thresholdSq)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static PointF EvaluateCubicBezier(float t, float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3)
+        {
+            var u = 1f - t;
+            var tt = t * t;
+            var uu = u * u;
+            var uuu = uu * u;
+            var ttt = tt * t;
+            var x = uuu * x0 + 3f * uu * t * x1 + 3f * u * tt * x2 + ttt * x3;
+            var y = uuu * y0 + 3f * uu * t * y1 + 3f * u * tt * y2 + ttt * y3;
+            return new PointF(x, y);
+        }
+
+        private struct TieGeometry
+        {
+            public float X1;
+            public float X2;
+            public float BaseY;
+            public float ArchTop;
         }
 
         private void DrawMelodyRow(Graphics g, JianpuMeasure measure, MeasureLayout layout, int selectedMeasureIndex, int selectedNoteIndex, int selectedInsertIndex)
@@ -691,9 +870,233 @@ namespace JianpuEditor.Rendering
             }
         }
 
-        private void DrawSecondaryTextRow(Graphics g, string text, Rectangle bounds, bool isSelectedMeasure, bool isEmpty)
+        private ScoreHitResult HitTestChordMarkers(JianpuScore score, ScoreLayout layout, Point point)
         {
-            DrawTextRowCore(g, text, bounds, isSelectedMeasure, isEmpty, _secondaryFont, StringAlignment.Near);
+            var boundsList = ChordMarkerLayout.BuildBounds(score, layout.Measures);
+            for (var i = boundsList.Count - 1; i >= 0; i--)
+            {
+                var bounds = boundsList[i];
+                if (bounds.DeleteBounds.Contains(point))
+                {
+                    return new ScoreHitResult
+                    {
+                        HitType = ScoreHitType.ChordDelete,
+                        MeasureIndex = bounds.MeasureIndex,
+                        ChordMarkerIndex = bounds.MarkerIndex,
+                        Bounds = bounds.DeleteBounds
+                    };
+                }
+
+                if (bounds.DragHandleBounds.Contains(point))
+                {
+                    return new ScoreHitResult
+                    {
+                        HitType = ScoreHitType.ChordDragHandle,
+                        MeasureIndex = bounds.MeasureIndex,
+                        ChordMarkerIndex = bounds.MarkerIndex,
+                        Bounds = bounds.DragHandleBounds
+                    };
+                }
+
+                if (bounds.TextBoxBounds.Contains(point))
+                {
+                    return new ScoreHitResult
+                    {
+                        HitType = ScoreHitType.ChordMarker,
+                        MeasureIndex = bounds.MeasureIndex,
+                        ChordMarkerIndex = bounds.MarkerIndex,
+                        Bounds = bounds.TextBoxBounds
+                    };
+                }
+            }
+
+            return null;
+        }
+
+        private ScoreHitResult HitTestSecondaryRow(JianpuScore score, MeasureLayout measure, Point point, int secondaryTop)
+        {
+            var measureData = score.Measures[measure.MeasureIndex];
+            ChordMarkerService.NormalizeMeasure(measureData);
+            var bounds = ChordMarkerLayout.GetSecondaryRowBounds(measure);
+            if (!bounds.Contains(point))
+            {
+                return new ScoreHitResult
+                {
+                    HitType = ScoreHitType.SecondaryText,
+                    MeasureIndex = measure.MeasureIndex,
+                    Bounds = bounds
+                };
+            }
+
+            if (measureData.ChordMarkers.Count < JianpuMeasure.MaxChordMarkers)
+            {
+                var duration = ScoreMidiSchedule.GetMeasureDurationUnits(measureData);
+                var beat = ChordMarkerService.MapXToBeat(measure.X, measure.Width, point.X, duration);
+                var occupied = measureData.ChordMarkers.Any(marker => Math.Abs(marker.BeatPosition - beat) < 0.001);
+                if (!occupied)
+                {
+                    return new ScoreHitResult
+                    {
+                        HitType = ScoreHitType.ChordAddSlot,
+                        MeasureIndex = measure.MeasureIndex,
+                        Bounds = bounds
+                    };
+                }
+            }
+
+            return new ScoreHitResult
+            {
+                HitType = ScoreHitType.SecondaryText,
+                MeasureIndex = measure.MeasureIndex,
+                Bounds = bounds
+            };
+        }
+
+        private void DrawChordMarkersRow(
+            Graphics g,
+            JianpuMeasure measureData,
+            MeasureLayout measure,
+            bool isSelectedMeasure,
+            int selectedMeasureIndex,
+            int selectedChordMeasureIndex,
+            int selectedChordMarkerIndex,
+            ScoreLayoutOptions layoutOptions)
+        {
+            ChordMarkerService.NormalizeMeasure(measureData);
+            var rowBounds = ChordMarkerLayout.GetSecondaryRowBounds(measure);
+            var textOnly = layoutOptions.ChordMarkersTextOnly;
+            var showAffordances = layoutOptions.ShowChordEditorAffordances;
+
+            if (showAffordances && isSelectedMeasure && measureData.ChordMarkers.Count == 0)
+            {
+                using (var brush = new SolidBrush(Color.FromArgb(28, 120, 144, 156)))
+                {
+                    g.FillRectangle(brush, rowBounds);
+                }
+            }
+
+            if (showAffordances)
+            {
+                var duration = ScoreMidiSchedule.GetMeasureDurationUnits(measureData);
+                var beatCount = (int)Math.Max(1, Math.Round(duration));
+                using (var gridPen = new Pen(Color.FromArgb(36, 120, 144, 156), 1f))
+                {
+                    for (var beat = 0; beat <= beatCount; beat++)
+                    {
+                        var x = ChordMarkerLayout.GetBeatAnchorX(measure, measureData, beat);
+                        g.DrawLine(gridPen, x, rowBounds.Top + 2, x, rowBounds.Bottom - 2);
+                    }
+                }
+            }
+
+            for (var i = 0; i < measureData.ChordMarkers.Count; i++)
+            {
+                var marker = measureData.ChordMarkers[i];
+                var markerBounds = ChordMarkerLayout.GetMarkerBounds(measure, measureData, measure.MeasureIndex, i, marker);
+                if (textOnly)
+                {
+                    var isSelected = measure.MeasureIndex == selectedChordMeasureIndex && i == selectedChordMarkerIndex;
+                    DrawChordMarkerTextOnly(g, markerBounds, marker.Text, rowBounds, isSelected, showAffordances);
+                }
+                else
+                {
+                    var isSelected = measure.MeasureIndex == selectedChordMeasureIndex && i == selectedChordMarkerIndex;
+                    DrawChordMarkerChrome(g, markerBounds, marker.Text, isSelected);
+                }
+            }
+
+            if (showAffordances
+                && isSelectedMeasure
+                && measure.MeasureIndex == selectedMeasureIndex
+                && measureData.ChordMarkers.Count < JianpuMeasure.MaxChordMarkers)
+            {
+                using (var font = new Font("Microsoft YaHei", 8f, FontStyle.Regular))
+                {
+                    var hint = "+ 点击空白拍位添加和弦";
+                    g.DrawString(hint, font, Brushes.DimGray, rowBounds.Left + 4, rowBounds.Bottom - 14);
+                }
+            }
+        }
+
+        private void DrawChordMarkerTextOnly(
+            Graphics g,
+            ChordMarkerBounds bounds,
+            string text,
+            Rectangle rowBounds,
+            bool isSelected,
+            bool showAffordances)
+        {
+            var y = rowBounds.Top + (rowBounds.Height - _secondaryFont.Height) / 2f;
+            if (showAffordances && isSelected)
+            {
+                var chromeBounds = Rectangle.Union(
+                    bounds.TextBoxBounds,
+                    Rectangle.Union(bounds.DeleteBounds, bounds.DragHandleBounds));
+                using (var brush = new SolidBrush(Color.FromArgb(255, 255, 240)))
+                using (var pen = new Pen(Color.FromArgb(220, 41, 98, 255), 2f))
+                {
+                    g.FillRectangle(brush, chromeBounds);
+                    g.DrawRectangle(pen, chromeBounds);
+                }
+
+                using (var handleFont = new Font("Arial", 8f, FontStyle.Bold))
+                using (var deleteFont = new Font("Arial", 10f, FontStyle.Bold))
+                {
+                    g.DrawString("::", handleFont, Brushes.DimGray, bounds.DragHandleBounds.Left + 1, bounds.DragHandleBounds.Top + 4);
+                    g.DrawString("x", deleteFont, Brushes.IndianRed, bounds.DeleteBounds.Left + 4, bounds.DeleteBounds.Top + 2);
+                }
+            }
+
+            var displayText = string.IsNullOrWhiteSpace(text) ? string.Empty : text.Trim();
+            if (string.IsNullOrEmpty(displayText))
+            {
+                return;
+            }
+
+            g.DrawString(displayText, _secondaryFont, Brushes.Black, bounds.AnchorX, y);
+        }
+
+        private void DrawChordMarkerChrome(Graphics g, ChordMarkerBounds bounds, string text, bool isSelected)
+        {
+            var backColor = isSelected ? Color.FromArgb(255, 255, 240) : Color.FromArgb(248, 248, 252);
+            var borderColor = isSelected ? Color.FromArgb(220, 41, 98, 255) : Color.FromArgb(180, 160, 174, 192);
+
+            using (var backBrush = new SolidBrush(backColor))
+            using (var borderPen = new Pen(borderColor, isSelected ? 2f : 1f))
+            {
+                g.FillRectangle(backBrush, bounds.TextBoxBounds);
+                g.DrawRectangle(borderPen, bounds.TextBoxBounds);
+                g.FillRectangle(backBrush, bounds.DeleteBounds);
+                g.DrawRectangle(borderPen, bounds.DeleteBounds);
+                g.FillRectangle(backBrush, bounds.DragHandleBounds);
+                g.DrawRectangle(borderPen, bounds.DragHandleBounds);
+            }
+
+            using (var handleFont = new Font("Arial", 8f, FontStyle.Bold))
+            using (var deleteFont = new Font("Arial", 10f, FontStyle.Bold))
+            using (var textFont = _secondaryFont)
+            {
+                g.DrawString("::", handleFont, Brushes.DimGray, bounds.DragHandleBounds.Left + 1, bounds.DragHandleBounds.Top + 4);
+                g.DrawString("x", deleteFont, Brushes.IndianRed, bounds.DeleteBounds.Left + 4, bounds.DeleteBounds.Top + 2);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    var textRect = new RectangleF(
+                        bounds.TextBoxBounds.Left + 4,
+                        bounds.TextBoxBounds.Top,
+                        bounds.TextBoxBounds.Width - 8,
+                        bounds.TextBoxBounds.Height);
+                    using (var format = new StringFormat
+                    {
+                        Alignment = StringAlignment.Near,
+                        LineAlignment = StringAlignment.Center,
+                        Trimming = StringTrimming.EllipsisCharacter,
+                        FormatFlags = StringFormatFlags.NoWrap
+                    })
+                    {
+                        g.DrawString(text.Trim(), textFont, Brushes.Black, textRect, format);
+                    }
+                }
+            }
         }
 
         private void DrawLyricRow(

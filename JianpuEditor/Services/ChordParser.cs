@@ -1,9 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
+using JianpuEditor.Models;
 
 namespace JianpuEditor.Services
 {
+    public sealed class ScheduledChordSymbol
+    {
+        public string Symbol { get; set; }
+
+        public double BeatPosition { get; set; }
+    }
     internal static class ChordParser
     {
         private static readonly int[] MajorTriad = { 0, 4, 7 };
@@ -23,6 +31,33 @@ namespace JianpuEditor.Services
         public static bool IsChordSymbol(string token)
         {
             return !string.IsNullOrWhiteSpace(token) && ChordTokenPattern.IsMatch(token.Trim());
+        }
+
+        public static List<ScheduledChordSymbol> ExtractScheduledChords(JianpuMeasure measure)
+        {
+            ChordMarkerService.NormalizeMeasure(measure);
+            var scheduled = new List<ScheduledChordSymbol>();
+            if (measure?.ChordMarkers == null)
+            {
+                return scheduled;
+            }
+
+            foreach (var marker in measure.ChordMarkers.OrderBy(item => item.BeatPosition))
+            {
+                var text = marker.Text?.Trim();
+                if (string.IsNullOrWhiteSpace(text) || !IsChordSymbol(text))
+                {
+                    continue;
+                }
+
+                scheduled.Add(new ScheduledChordSymbol
+                {
+                    Symbol = text,
+                    BeatPosition = marker.BeatPosition
+                });
+            }
+
+            return scheduled;
         }
 
         public static List<string> ExtractChordSymbols(string secondaryText)
@@ -47,7 +82,7 @@ namespace JianpuEditor.Services
                 }
 
                 chords.Add(token.Trim());
-                if (chords.Count >= 2)
+                if (chords.Count >= JianpuMeasure.MaxChordMarkers)
                 {
                     break;
                 }
