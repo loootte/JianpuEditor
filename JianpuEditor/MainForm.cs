@@ -128,6 +128,7 @@ namespace JianpuEditor
             editMenu.DropDownItems.Add(CreateMenuItem("撤销最后一个音符", Keys.Control | Keys.Z, (s, e) => DeleteLast()));
             editMenu.DropDownItems.Add(CreateMenuItem("新增小节", Keys.None, (s, e) => AddMeasure()));
             editMenu.DropDownItems.Add(CreateMenuItem("复制小节", Keys.None, (s, e) => DuplicateMeasures()));
+            editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
             editMenu.DropDownItems.Add(CreateMenuItem("清空谱面", Keys.None, OnClearScore));
 
             menu.Items.Add(fileMenu);
@@ -259,6 +260,7 @@ namespace JianpuEditor
             _chordBox.TextChanged += (s, e) => ApplyChordMarkerText();
             panel.Controls.Add(_chordBox);
             panel.Controls.Add(CreateToolButton("添加和弦", AddChordMarker));
+            panel.Controls.Add(CreateToolButton("转调", ShowTransposeDialog));
 
             panel.Controls.Add(new Label { Text = "歌词:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
             _lyricBox.Width = 160;
@@ -1245,6 +1247,104 @@ namespace JianpuEditor
         {
             AppLog.Info("简谱编辑器退出");
             _playbackService.Dispose();
+        }
+
+        private void OnTransposeChords(object sender, EventArgs e)
+        {
+            ShowTransposeDialog();
+        }
+
+        private void ShowTransposeDialog()
+        {
+            using (var dialog = new Form())
+            {
+                dialog.Text = "和弦转调";
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ShowInTaskbar = false;
+                dialog.ClientSize = new Size(380, 156);
+                dialog.Font = Font;
+
+                var sourceLabel = new Label
+                {
+                    Text = "当前调号：",
+                    Location = new Point(16, 18),
+                    AutoSize = true
+                };
+                var sourceValue = new Label
+                {
+                    Text = _canvas.Score.KeySignature ?? "1=C",
+                    Location = new Point(108, 18),
+                    AutoSize = true
+                };
+                var targetLabel = new Label
+                {
+                    Text = "目标调号：",
+                    Location = new Point(16, 54),
+                    AutoSize = true
+                };
+                var targetBox = new TextBox
+                {
+                    Location = new Point(108, 50),
+                    Width = 240,
+                    Text = _canvas.Score.KeySignature ?? "1=C"
+                };
+                var hintLabel = new Label
+                {
+                    Text = "支持格式：G、1=G、F#、Bb、D大调。仅转调副旋律中的和弦标识。",
+                    Location = new Point(16, 84),
+                    Size = new Size(348, 32),
+                    ForeColor = Color.DimGray
+                };
+                var okButton = new Button
+                {
+                    Text = "转换",
+                    DialogResult = DialogResult.OK,
+                    Location = new Point(192, 118),
+                    Width = 76
+                };
+                var cancelButton = new Button
+                {
+                    Text = "取消",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new Point(276, 118),
+                    Width = 76
+                };
+
+                dialog.Controls.Add(sourceLabel);
+                dialog.Controls.Add(sourceValue);
+                dialog.Controls.Add(targetLabel);
+                dialog.Controls.Add(targetBox);
+                dialog.Controls.Add(hintLabel);
+                dialog.Controls.Add(okButton);
+                dialog.Controls.Add(cancelButton);
+                dialog.AcceptButton = okButton;
+                dialog.CancelButton = cancelButton;
+
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                var targetKey = targetBox.Text?.Trim();
+                if (string.IsNullOrEmpty(targetKey))
+                {
+                    MessageBox.Show("请输入目标调号。", "转调", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (!ChordTransposeService.TryTransposeChords(_canvas.Score, targetKey, out var errorMessage, out var transposedCount))
+                {
+                    MessageBox.Show(errorMessage, "转调失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                SyncHeaderFieldsFromScore();
+                SyncChordTextBox();
+                RefreshAfterEdit("已将 " + transposedCount + " 个和弦转调到 " + _canvas.Score.KeySignature);
+            }
         }
 
         private void SyncHeaderFieldsFromScore()

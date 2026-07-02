@@ -60,6 +60,43 @@ namespace JianpuEditor.Services
             return scheduled;
         }
 
+        public static string TransposeSymbol(string chordSymbol, int semitones)
+        {
+            if (string.IsNullOrWhiteSpace(chordSymbol) || semitones == 0)
+            {
+                return chordSymbol?.Trim() ?? string.Empty;
+            }
+
+            var text = chordSymbol.Trim();
+            string bassPart = null;
+            var slashIndex = text.IndexOf('/');
+            if (slashIndex >= 0)
+            {
+                bassPart = text.Substring(slashIndex + 1).Trim();
+                text = text.Substring(0, slashIndex).Trim();
+            }
+
+            if (!TryParseChordBody(text, out var rootPitchClass, out var quality))
+            {
+                return chordSymbol;
+            }
+
+            var result = KeySignatureService.PitchClassToNoteName(Mod12(rootPitchClass + semitones)) + (quality ?? string.Empty);
+            if (!string.IsNullOrEmpty(bassPart))
+            {
+                if (TryParseChordBody(bassPart, out var bassPitchClass, out _))
+                {
+                    result += "/" + KeySignatureService.PitchClassToNoteName(Mod12(bassPitchClass + semitones));
+                }
+                else
+                {
+                    result += "/" + bassPart;
+                }
+            }
+
+            return result;
+        }
+
         public static List<string> ExtractChordSymbols(string secondaryText)
         {
             var chords = new List<string>();
