@@ -67,7 +67,7 @@ namespace JianpuEditor.Services
                 case 7: return "G";
                 case 8: return "G#";
                 case 9: return "A";
-                case 10: return "A#";
+                case 10: return "Bb";
                 case 11: return "B";
                 default: return "C";
             }
