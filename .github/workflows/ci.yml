@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore JianpuEditor.sln
+
+      - name: Build Debug
+        run: dotnet build JianpuEditor.sln -c Debug --no-restore
+
+      - name: Build Release
+        run: dotnet build JianpuEditor.sln -c Release --no-restore
+
+      - name: MIDI export smoke test
+        shell: pwsh
+        run: ./scripts/test-midi-export.ps1
+
+      - name: Upload Release build
+        uses: actions/upload-artifact@v4
+        with:
+          name: JianpuEditor-${{ github.sha }}
+          path: |
+            JianpuEditor/bin/Release/net472/JianpuEditor.exe
+            JianpuEditor/bin/Release/net472/*.dll
+            JianpuEditor/bin/Release/net472/JianpuEditor.exe.config
+          if-no-files-found: error
+          retention-days: 14

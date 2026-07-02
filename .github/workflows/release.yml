@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Installer version (e.g. 1.0.1)
+        required: true
+        default: 1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ inputs.version }}".Trim()
+          } else {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+') {
+            throw "Version must look like 1.0.0, got '$version'"
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building version $version"
+
+      - name: Patch installer version
+        shell: pwsh
+        run: |
+          $iss = "installer/JianpuEditor.iss"
+          $version = "${{ steps.version.outputs.value }}"
+          $content = Get-Content $iss -Raw
+          $content = $content -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$version`""
+          Set-Content -Path $iss -Value $content -NoNewline
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build Release
+        run: dotnet build JianpuEditor.sln -c Release
+
+      - name: MIDI export smoke test
+        shell: pwsh
+        run: ./scripts/test-midi-export.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found at $iscc"
+          }
+          "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          Push-Location installer
+          try {
+            & $env:ISCC "JianpuEditor.iss"
+            if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Collect installer
+        id: artifact
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.value }}"
+          $setup = Get-ChildItem "installer/output/JianpuEditor-Setup-$version.exe" -ErrorAction Stop
+          $zip = "installer/output/JianpuEditor-Setup-$version.zip"
+          Compress-Archive -Path $setup.FullName -DestinationPath $zip -Force
+          "setup=$($setup.FullName)" >> $env:GITHUB_OUTPUT
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          Write-Host "Installer: $($setup.FullName) ($([math]::Round($setup.Length / 1MB, 2)) MB)"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JianpuEditor-Setup-${{ steps.version.outputs.value }}
+          path: |
+            ${{ steps.artifact.outputs.setup }}
+            ${{ steps.artifact.outputs.zip }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: JianpuEditor ${{ steps.version.outputs.value }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifact.outputs.setup }}
+            ${{ steps.artifact.outputs.zip }}
