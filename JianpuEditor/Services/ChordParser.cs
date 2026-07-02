@@ -97,37 +97,6 @@ namespace JianpuEditor.Services
             return result;
         }
 
-        public static List<string> ExtractChordSymbols(string secondaryText)
-        {
-            var chords = new List<string>();
-            if (string.IsNullOrWhiteSpace(secondaryText))
-            {
-                return chords;
-            }
-
-            var tokens = Regex.Split(secondaryText.Trim(), @"\s+");
-            foreach (var token in tokens)
-            {
-                if (string.IsNullOrWhiteSpace(token))
-                {
-                    continue;
-                }
-
-                if (!IsChordSymbol(token))
-                {
-                    return new List<string>();
-                }
-
-                chords.Add(token.Trim());
-                if (chords.Count >= JianpuMeasure.MaxChordMarkers)
-                {
-                    break;
-                }
-            }
-
-            return chords;
-        }
-
         public static List<int> ToBlockChordMidiNotes(string chordSymbol, int rootOctave = 4, int bassOctave = 3)
         {
             if (string.IsNullOrWhiteSpace(chordSymbol))

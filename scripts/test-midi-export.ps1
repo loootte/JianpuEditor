@@ -23,7 +23,17 @@ $n2.Pitch = 2
 $notes.Add($n1)
 $notes.Add($n2)
 $measure.MelodyNotes = $notes
-$measure.SecondaryText = "D    Bm7"
+$chordMarkerType = $assembly.GetType("JianpuEditor.Models.ChordMarker")
+$chordMarkers = New-Object "System.Collections.Generic.List[$chordMarkerType]"
+$c1 = [Activator]::CreateInstance($chordMarkerType)
+$c1.Text = "D"
+$c1.BeatPosition = 0
+$c2 = [Activator]::CreateInstance($chordMarkerType)
+$c2.Text = "Bm7"
+$c2.BeatPosition = 2
+$chordMarkers.Add($c1)
+$chordMarkers.Add($c2)
+$measure.ChordMarkers = $chordMarkers
 $score.Measures = New-Object "System.Collections.Generic.List[$measureType]"
 $score.Measures.Add($measure)
 

@@ -14,7 +14,6 @@ namespace JianpuEditor.Services
 
             var clone = new JianpuMeasure
             {
-                SecondaryText = source.SecondaryText ?? string.Empty,
                 LyricText = source.LyricText ?? string.Empty,
                 MelodyNotes = new List<JianpuNote>(),
                 ChordMarkers = new List<ChordMarker>()

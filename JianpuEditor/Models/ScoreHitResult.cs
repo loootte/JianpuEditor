@@ -12,7 +12,7 @@ namespace JianpuEditor.Models
         ChordDragHandle,
         ChordDelete,
         ChordAddSlot,
-        SecondaryText,
+        ChordRow,
         LyricText,
         Measure
     }

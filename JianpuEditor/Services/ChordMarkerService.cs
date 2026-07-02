@@ -33,12 +33,46 @@ namespace JianpuEditor.Services
                 measure.ChordMarkers = new List<ChordMarker>();
             }
 
-            if (measure.ChordMarkers.Count == 0 && !string.IsNullOrWhiteSpace(measure.SecondaryText))
+            TrimAndSort(measure);
+        }
+
+        public static void ImportLegacyChordText(JianpuMeasure measure, string legacyText)
+        {
+            if (measure == null || string.IsNullOrWhiteSpace(legacyText))
             {
-                MigrateLegacySecondaryText(measure);
+                return;
             }
 
-            TrimAndSort(measure);
+            if (measure.ChordMarkers == null)
+            {
+                measure.ChordMarkers = new List<ChordMarker>();
+            }
+
+            if (measure.ChordMarkers.Count > 0)
+            {
+                return;
+            }
+
+            var tokens = Regex.Split(legacyText.Trim(), @"\s+")
+                .Where(token => !string.IsNullOrWhiteSpace(token))
+                .Take(JianpuMeasure.MaxChordMarkers)
+                .ToList();
+            if (tokens.Count == 0)
+            {
+                return;
+            }
+
+            var duration = ScoreMidiSchedule.GetMeasureDurationUnits(measure);
+            var slotDuration = duration / tokens.Count;
+            measure.ChordMarkers.Clear();
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                measure.ChordMarkers.Add(new ChordMarker
+                {
+                    Text = tokens[i],
+                    BeatPosition = SnapBeatPosition(i * slotDuration, duration)
+                });
+            }
         }
 
         public static bool TryAddMarker(JianpuMeasure measure, double beatPosition, string text = "")
@@ -132,30 +166,6 @@ namespace JianpuEditor.Services
 
             var relative = (x - measureX) / (double)measureWidth * measureDuration;
             return SnapBeatPosition(relative, measureDuration);
-        }
-
-        private static void MigrateLegacySecondaryText(JianpuMeasure measure)
-        {
-            var tokens = Regex.Split(measure.SecondaryText.Trim(), @"\s+")
-                .Where(token => !string.IsNullOrWhiteSpace(token))
-                .Take(JianpuMeasure.MaxChordMarkers)
-                .ToList();
-            if (tokens.Count == 0)
-            {
-                return;
-            }
-
-            var duration = ScoreMidiSchedule.GetMeasureDurationUnits(measure);
-            var slotDuration = duration / tokens.Count;
-            measure.ChordMarkers.Clear();
-            for (var i = 0; i < tokens.Count; i++)
-            {
-                measure.ChordMarkers.Add(new ChordMarker
-                {
-                    Text = tokens[i],
-                    BeatPosition = SnapBeatPosition(i * slotDuration, duration)
-                });
-            }
         }
 
         private static void TrimAndSort(JianpuMeasure measure)

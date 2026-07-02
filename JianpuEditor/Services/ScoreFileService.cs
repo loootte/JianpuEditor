@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using JianpuEditor.Models;
@@ -27,6 +28,7 @@ namespace JianpuEditor.Services
                     ObjectCreationHandling = ObjectCreationHandling.Replace
                 };
                 var score = JsonConvert.DeserializeObject<JianpuScore>(json, settings) ?? CreateEmptyScore();
+                ImportLegacyChordMarkers(score, token["Measures"] as JArray);
                 ChordMarkerService.NormalizeScore(score);
                 return score;
             }
@@ -34,6 +36,24 @@ namespace JianpuEditor.Services
             var legacyScore = MigrateLegacyScore(token);
             ChordMarkerService.NormalizeScore(legacyScore);
             return legacyScore;
+        }
+
+        private static void ImportLegacyChordMarkers(JianpuScore score, JArray measuresToken)
+        {
+            if (score?.Measures == null || measuresToken == null)
+            {
+                return;
+            }
+
+            var count = Math.Min(measuresToken.Count, score.Measures.Count);
+            for (var i = 0; i < count; i++)
+            {
+                var legacyText = measuresToken[i].Value<string>("SecondaryText");
+                if (!string.IsNullOrWhiteSpace(legacyText))
+                {
+                    ChordMarkerService.ImportLegacyChordText(score.Measures[i], legacyText);
+                }
+            }
         }
 
         private static JianpuScore MigrateLegacyScore(JToken token)

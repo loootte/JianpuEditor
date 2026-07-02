@@ -718,7 +718,7 @@ namespace JianpuEditor.Controls
                     }
 
                     break;
-                case ScoreHitType.SecondaryText:
+                case ScoreHitType.ChordRow:
                     if ((Control.ModifierKeys & Keys.Control) == Keys.Control)
                     {
                         HandleMeasureSelectionClick(hit.MeasureIndex);

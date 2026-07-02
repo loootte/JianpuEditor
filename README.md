@@ -28,7 +28,7 @@
 - **歌词行**：点击歌词行内联编辑；工具栏也可输入当前小节歌词
 - **三行排版**：主旋律、和弦标识、歌词
 - **小节操作**：新建小节；工具栏设置「从 / 到」小节号后复制小节范围
-- **文件**：JSON 格式保存 / 打开（自动迁移旧版 `SecondaryText` 和弦格式）
+- **文件**：JSON 格式保存 / 打开
 - **PDF 导出**：A4 纵向，每行 4 小节；和弦仅输出文字，无编辑边框
 - **MIDI 导出**
   - 主旋律按简谱时值与调号导出
@@ -107,10 +107,6 @@ dotnet build JianpuEditor.sln -c Release
 
 主旋律简谱数字（1–7）不参与转调；若需移调旋律，请手动编辑。
 
-### 旧格式兼容
-
-旧版每小节使用单个 `SecondaryText` 字符串、空格分隔和弦（如 `D Bm7`）。打开文件时会自动迁移为 `ChordMarkers`，拍位按小节时值均分。
-
 ## 曲谱文件格式
 
 曲谱保存为 JSON（`.json` / `.jianpu`），主要字段：
@@ -125,7 +121,6 @@ dotnet build JianpuEditor.sln -c Release
 |------|------|
 | `MelodyNotes[]` | 主旋律音符 |
 | `ChordMarkers[]` | `{ "Text": "C", "BeatPosition": 0 }` |
-| `SecondaryText` | 旧版副旋律（读入时迁移，新项目可忽略） |
 | `LyricText` | 歌词 |
 
 `Tempo` 为谱面显示用语（如「中速」），`Bpm` 为播放与 MIDI 使用的每分钟拍数（默认 120）。

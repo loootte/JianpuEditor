@@ -922,7 +922,7 @@ namespace JianpuEditor.Rendering
             {
                 return new ScoreHitResult
                 {
-                    HitType = ScoreHitType.SecondaryText,
+                    HitType = ScoreHitType.ChordRow,
                     MeasureIndex = measure.MeasureIndex,
                     Bounds = bounds
                 };
@@ -946,7 +946,7 @@ namespace JianpuEditor.Rendering
 
             return new ScoreHitResult
             {
-                HitType = ScoreHitType.SecondaryText,
+                HitType = ScoreHitType.ChordRow,
                 MeasureIndex = measure.MeasureIndex,
                 Bounds = bounds
             };
