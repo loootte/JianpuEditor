@@ -67,7 +67,7 @@ dotnet build JianpuEditor.sln -c Release
 .\scripts\build-installer.ps1
 ```
 
-输出文件：`installer/output/JianpuEditor-Setup-1.0.0.exe`
+输出文件：`installer/output/JianpuEditor-Setup-1.1.0.exe`
 
 ## CI/CD
 
