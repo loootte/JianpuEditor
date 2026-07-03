@@ -221,63 +221,40 @@ namespace JianpuEditor.ViewModels
             var refs = GetSelectedNoteRefs();
             if (refs.Count < 2)
             {
-                _messenger.Send(new StatusChangedMessage("请选中两个相邻音符进行合并"));
+                _messenger.Send(new StatusChangedMessage("请至少选中两个音符进行合并"));
                 return ScoreEditResult.Unchanged;
             }
 
             _document.EnsureMeasures();
-            var runs = NoteSplitMergeService.GetAdjacentRuns(refs);
-            if (runs.Count == 0)
+            if (NoteSplitMergeService.GetMergePairs(refs).Count == 0)
             {
-                return PublishEdit("无法合并：请选择同一小节内的相邻音符");
+                return PublishEdit("无法合并：请至少选中两个音符");
             }
 
-            var mergedCount = 0;
+            var mergedCount = NoteSplitMergeService.ApplyMergePairs(_document.Score, refs);
             int? selectMeasureIndex = null;
             int? selectNoteIndex = null;
-
-            foreach (var run in runs.OrderByDescending(item => item[0].MeasureIndex)
-                .ThenByDescending(item => item[0].NoteIndex))
+            if (mergedCount > 0)
             {
-                var measureIndex = run[0].MeasureIndex;
-                var measure = _document.Score.Measures[measureIndex];
-                var startIndex = run[0].NoteIndex;
-                var allPureQuarter = run.All(item =>
+                var firstPair = NoteSplitMergeService.GetMergePairs(refs)
+                    .Where(item => item.Right.NoteIndex == item.Left.NoteIndex + 1)
+                    .OrderBy(item => item.Left.MeasureIndex)
+                    .ThenBy(item => item.Left.NoteIndex)
+                    .FirstOrDefault();
+                if (firstPair.Left.MeasureIndex >= 0)
                 {
-                    var note = measure.MelodyNotes[item.NoteIndex];
-                    return note.Type != NoteType.Rest
-                        && !note.Dotted
-                        && GetDurationTier(note) == 2;
-                });
-
-                var mergeCount = allPureQuarter
-                    ? Math.Min(run.Count, 4)
-                    : 2;
-                var mergeRefs = run.Take(mergeCount).ToList();
-                var noteObjects = mergeRefs
-                    .Select(item => measure.MelodyNotes[item.NoteIndex])
-                    .ToList();
-
-                if (!NoteSplitMergeService.TryMergeNotes(noteObjects, out var merged))
-                {
-                    continue;
+                    selectMeasureIndex = firstPair.Left.MeasureIndex;
+                    selectNoteIndex = firstPair.Left.NoteIndex;
                 }
-
-                measure.MelodyNotes[startIndex] = merged;
-                var removeIndices = Enumerable.Range(startIndex + 1, mergeCount - 1).ToArray();
-                NoteSplitMergeService.RemoveNotes(_document.Score, measureIndex, removeIndices);
-                mergedCount++;
-                selectMeasureIndex = measureIndex;
-                selectNoteIndex = startIndex;
             }
 
             if (mergedCount == 0)
             {
-                return PublishEdit("无法合并：相邻音符时值相差超过 2 倍或类型不兼容");
+                return PublishEdit("无法合并：配对音符不相邻、时值相差超过 2 倍或类型不兼容");
             }
 
             var result = PublishEdit(mergedCount > 1
-                ? "已合并 " + mergedCount + " 组音符"
+                ? "已合并 " + mergedCount + " 对音符"
                 : "已合并选中音符");
             result.SelectNoteMeasureIndex = selectMeasureIndex;
             result.SelectNoteIndex = selectNoteIndex;

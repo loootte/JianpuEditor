@@ -50,21 +50,20 @@ namespace JianpuEditor.Tests.Services
         }
 
         [Fact]
-        public void TryMergeNotes_MergesAdjacentQuartersIntoExtension()
+        public void TryMergeNotes_MergesQuarterPairIntoExtension()
         {
             var notes = new[]
             {
                 new JianpuNote { Pitch = 1, Underlines = 0 },
-                new JianpuNote { Pitch = 2, Underlines = 0 },
-                new JianpuNote { Pitch = 3, Underlines = 0 }
+                new JianpuNote { Pitch = 2, Underlines = 0 }
             };
 
             var ok = NoteSplitMergeService.TryMergeNotes(notes, out var merged);
 
             Assert.True(ok);
             Assert.Equal(1, merged.Pitch);
-            Assert.Equal(2, merged.Dashes);
-            Assert.Equal(4, NoteEditorViewModel.GetDurationTier(merged));
+            Assert.Equal(1, merged.Dashes);
+            Assert.Equal(3, NoteEditorViewModel.GetDurationTier(merged));
         }
 
         [Fact]
@@ -84,21 +83,51 @@ namespace JianpuEditor.Tests.Services
         }
 
         [Fact]
-        public void GetAdjacentRuns_GroupsConsecutiveSelections()
+        public void ApplyMergePairs_MergesAllPairsWithinMeasure()
+        {
+            var score = new JianpuScore();
+            score.Measures.Add(new JianpuMeasure());
+            for (var pitch = 1; pitch <= 5; pitch++)
+            {
+                score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = pitch, Underlines = 0 });
+            }
+
+            var refs = new[]
+            {
+                new ScoreNoteRef(0, 0),
+                new ScoreNoteRef(0, 1),
+                new ScoreNoteRef(0, 2),
+                new ScoreNoteRef(0, 3),
+                new ScoreNoteRef(0, 4)
+            };
+
+            var mergedCount = NoteSplitMergeService.ApplyMergePairs(score, refs);
+
+            Assert.Equal(2, mergedCount);
+            Assert.Equal(3, score.Measures[0].MelodyNotes.Count);
+            Assert.Equal(1, score.Measures[0].MelodyNotes[0].Dashes);
+            Assert.Equal(1, score.Measures[0].MelodyNotes[1].Dashes);
+            Assert.Equal(5, score.Measures[0].MelodyNotes[2].Pitch);
+        }
+
+        [Fact]
+        public void GetMergePairs_PairsSelectedNotesTwoByTwo()
         {
             var refs = new[]
             {
                 new ScoreNoteRef(0, 1),
                 new ScoreNoteRef(0, 2),
-                new ScoreNoteRef(0, 4)
+                new ScoreNoteRef(0, 4),
+                new ScoreNoteRef(0, 5)
             };
 
-            var runs = NoteSplitMergeService.GetAdjacentRuns(refs);
+            var pairs = NoteSplitMergeService.GetMergePairs(refs);
 
-            Assert.Single(runs);
-            Assert.Equal(2, runs[0].Count);
-            Assert.Equal(1, runs[0][0].NoteIndex);
-            Assert.Equal(2, runs[0][1].NoteIndex);
+            Assert.Equal(2, pairs.Count);
+            Assert.Equal(1, pairs[0].Left.NoteIndex);
+            Assert.Equal(2, pairs[0].Right.NoteIndex);
+            Assert.Equal(4, pairs[1].Left.NoteIndex);
+            Assert.Equal(5, pairs[1].Right.NoteIndex);
         }
     }
 }

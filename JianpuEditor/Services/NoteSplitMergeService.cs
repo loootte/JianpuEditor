@@ -73,7 +73,7 @@ namespace JianpuEditor.Services
         public static bool TryMergeNotes(IReadOnlyList<JianpuNote> notes, out JianpuNote merged)
         {
             merged = null;
-            if (notes == null || notes.Count < 2)
+            if (notes == null || notes.Count != 2)
             {
                 return false;
             }
@@ -83,20 +83,7 @@ namespace JianpuEditor.Services
                 return false;
             }
 
-            if (notes.All(IsPureQuarter))
-            {
-                var count = Math.Min(notes.Count, MaxQuarterMergeCount);
-                merged = CreateQuarterFromTemplate(notes[0]);
-                if (count <= 1)
-                {
-                    return false;
-                }
-
-                NoteEditorViewModel.ApplyDurationTier(merged, 2 + (count - 1));
-                return true;
-            }
-
-            if (notes.Count != 2 || !CanMerge(notes[0], notes[1]))
+            if (!CanMerge(notes[0], notes[1]))
             {
                 return false;
             }
@@ -112,41 +99,83 @@ namespace JianpuEditor.Services
             return true;
         }
 
-        public static IReadOnlyList<IReadOnlyList<ScoreNoteRef>> GetAdjacentRuns(IReadOnlyList<ScoreNoteRef> refs)
+        public static IReadOnlyList<(ScoreNoteRef Left, ScoreNoteRef Right)> GetMergePairs(
+            IReadOnlyList<ScoreNoteRef> refs)
         {
-            if (refs == null || refs.Count == 0)
+            if (refs == null || refs.Count < 2)
             {
-                return Array.Empty<IReadOnlyList<ScoreNoteRef>>();
+                return Array.Empty<(ScoreNoteRef, ScoreNoteRef)>();
             }
 
-            var runs = new List<IReadOnlyList<ScoreNoteRef>>();
+            var pairs = new List<(ScoreNoteRef Left, ScoreNoteRef Right)>();
             foreach (var group in refs.GroupBy(item => item.MeasureIndex).OrderBy(item => item.Key))
             {
                 var ordered = group.OrderBy(item => item.NoteIndex).ToList();
-                var current = new List<ScoreNoteRef> { ordered[0] };
-                for (var i = 1; i < ordered.Count; i++)
+                for (var i = 0; i + 1 < ordered.Count; i += 2)
                 {
-                    if (ordered[i].NoteIndex == ordered[i - 1].NoteIndex + 1)
-                    {
-                        current.Add(ordered[i]);
-                        continue;
-                    }
-
-                    if (current.Count >= 2)
-                    {
-                        runs.Add(current.ToArray());
-                    }
-
-                    current = new List<ScoreNoteRef> { ordered[i] };
-                }
-
-                if (current.Count >= 2)
-                {
-                    runs.Add(current.ToArray());
+                    pairs.Add((ordered[i], ordered[i + 1]));
                 }
             }
 
-            return runs;
+            return pairs;
+        }
+
+        public static int ApplyMergePairs(JianpuScore score, IReadOnlyList<ScoreNoteRef> refs)
+        {
+            if (score?.Measures == null || refs == null || refs.Count < 2)
+            {
+                return 0;
+            }
+
+            var mergedCount = 0;
+            foreach (var group in refs.GroupBy(item => item.MeasureIndex).OrderBy(item => item.Key))
+            {
+                var ordered = group.OrderBy(item => item.NoteIndex).ToList();
+                var pairs = new List<(int Left, int Right)>();
+                for (var i = 0; i + 1 < ordered.Count; i += 2)
+                {
+                    var left = ordered[i].NoteIndex;
+                    var right = ordered[i + 1].NoteIndex;
+                    if (right == left + 1)
+                    {
+                        pairs.Add((left, right));
+                    }
+                }
+
+                var measureIndex = group.Key;
+                if (measureIndex < 0 || measureIndex >= score.Measures.Count)
+                {
+                    continue;
+                }
+
+                foreach (var pair in pairs.OrderByDescending(item => item.Left))
+                {
+                    var measure = score.Measures[measureIndex];
+                    if (pair.Left < 0
+                        || pair.Right >= measure.MelodyNotes.Count
+                        || pair.Right != pair.Left + 1)
+                    {
+                        continue;
+                    }
+
+                    var noteObjects = new[]
+                    {
+                        measure.MelodyNotes[pair.Left],
+                        measure.MelodyNotes[pair.Right]
+                    };
+
+                    if (!TryMergeNotes(noteObjects, out var merged))
+                    {
+                        continue;
+                    }
+
+                    measure.MelodyNotes[pair.Left] = merged;
+                    RemoveNotes(score, measureIndex, new[] { pair.Right });
+                    mergedCount++;
+                }
+            }
+
+            return mergedCount;
         }
 
         public static void ReplaceNoteWithMany(
@@ -219,14 +248,6 @@ namespace JianpuEditor.Services
             var units = JianpuRenderer.GetDurationUnits(note);
             var count = (int)Math.Round(units, MidpointRounding.AwayFromZero);
             return Math.Max(2, Math.Min(MaxQuarterMergeCount, count));
-        }
-
-        private static bool IsPureQuarter(JianpuNote note)
-        {
-            return note != null
-                && note.Type != NoteType.Rest
-                && !note.Dotted
-                && NoteEditorViewModel.GetDurationTier(note) == 2;
         }
 
         private static JianpuNote CreateQuarterFromTemplate(JianpuNote template)
