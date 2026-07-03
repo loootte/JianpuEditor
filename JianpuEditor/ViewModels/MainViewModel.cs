@@ -1,18 +1,21 @@
 using System;
-using JianpuEditor.Presentation;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace JianpuEditor.ViewModels
 {
-    public sealed class MainViewModel : NotifyPropertyChangedBase
+    public sealed class MainViewModel : ObservableObject
     {
         private string _statusMessage = "就绪";
 
-        public MainViewModel()
+        public MainViewModel(ScoreDocumentViewModel document)
         {
-            Document = new ScoreDocumentViewModel();
+            Document = document ?? throw new ArgumentNullException(nameof(document));
             NewScoreCommand = new RelayCommand(NewScore);
             OpenScoreCommand = new RelayCommand(() => RequestOpenScore?.Invoke(this, EventArgs.Empty));
-            SaveScoreCommand = new RelayCommand(() => RequestSaveScore?.Invoke(this, EventArgs.Empty), () => Document.IsDirty || !string.IsNullOrEmpty(Document.CurrentFilePath));
+            SaveScoreCommand = new RelayCommand(
+                () => RequestSaveScore?.Invoke(this, EventArgs.Empty),
+                () => Document.IsDirty || !string.IsNullOrEmpty(Document.CurrentFilePath));
         }
 
         public ScoreDocumentViewModel Document { get; }
@@ -37,7 +40,7 @@ namespace JianpuEditor.ViewModels
         {
             Document.ResetAsNew();
             StatusMessage = "已新建谱面";
-            SaveScoreCommand.RaiseCanExecuteChanged();
+            SaveScoreCommand.NotifyCanExecuteChanged();
         }
 
         public void SetStatus(string message)

@@ -1,14 +1,21 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Models;
-using JianpuEditor.Presentation;
 using JianpuEditor.Services;
 
 namespace JianpuEditor.ViewModels
 {
-    public sealed class ScoreDocumentViewModel : NotifyPropertyChangedBase
+    public sealed class ScoreDocumentViewModel : ObservableObject
     {
+        private readonly IScoreFileService _fileService;
         private JianpuScore _score = new JianpuScore();
         private string _currentFilePath;
         private bool _isDirty;
+
+        public ScoreDocumentViewModel(IScoreFileService fileService)
+        {
+            _fileService = fileService ?? new ScoreFileServiceAdapter();
+        }
 
         public JianpuScore Score
         {
@@ -126,14 +133,14 @@ namespace JianpuEditor.ViewModels
 
         public void LoadFromFile(string path)
         {
-            Score = ScoreFileService.Load(path);
+            Score = _fileService.Load(path);
             CurrentFilePath = path;
             IsDirty = false;
         }
 
         public void SaveToFile(string path)
         {
-            ScoreFileService.Save(_score, path);
+            _fileService.Save(_score, path);
             CurrentFilePath = path;
             IsDirty = false;
         }

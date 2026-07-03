@@ -738,7 +738,7 @@ namespace JianpuEditor.Controls
 
                     SelectSingleMeasure(hit.MeasureIndex, false);
                     RaiseSelectionChanged();
-                    StartInlineEdit(hit.MeasureIndex, hit.Bounds);
+                    StartInlineEdit(hit.MeasureIndex, hit.Bounds.ToRectangle());
                     break;
                 default:
                     HandleMeasureSelectionClick(hit.MeasureIndex);

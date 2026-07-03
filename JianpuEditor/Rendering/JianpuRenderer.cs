@@ -215,7 +215,7 @@ namespace JianpuEditor.Rendering
                     {
                         HitType = ScoreHitType.LyricText,
                         MeasureIndex = measure.MeasureIndex,
-                        Bounds = GetTextCellBounds(measure, lyricTop, TextRowHeight)
+                        Bounds = GetTextCellBounds(measure, lyricTop, TextRowHeight).ToIntRect()
                     };
                 }
 
@@ -267,7 +267,7 @@ namespace JianpuEditor.Rendering
                     HitType = ScoreHitType.Note,
                     MeasureIndex = measure.MeasureIndex,
                     NoteIndex = i,
-                    Bounds = GetNoteBounds(measure, i)
+                    Bounds = GetNoteBounds(measure, i).ToIntRect()
                 };
             }
 
@@ -349,7 +349,7 @@ namespace JianpuEditor.Rendering
                 HitType = ScoreHitType.Gap,
                 MeasureIndex = measure.MeasureIndex,
                 InsertIndex = insertIndex,
-                Bounds = GetGapBounds(measure, insertIndex)
+                Bounds = GetGapBounds(measure, insertIndex).ToIntRect()
             };
         }
 
@@ -533,7 +533,7 @@ namespace JianpuEditor.Rendering
                     HitType = ScoreHitType.Tie,
                     TieIndex = i,
                     MeasureIndex = score.Ties[i].StartMeasureIndex,
-                    Bounds = bounds
+                    Bounds = bounds.ToIntRect()
                 };
             }
 
@@ -897,7 +897,7 @@ namespace JianpuEditor.Rendering
                         HitType = ScoreHitType.ChordDelete,
                         MeasureIndex = bounds.MeasureIndex,
                         ChordMarkerIndex = bounds.MarkerIndex,
-                        Bounds = bounds.DeleteBounds
+                        Bounds = bounds.DeleteBounds.ToIntRect()
                     };
                 }
 
@@ -908,7 +908,7 @@ namespace JianpuEditor.Rendering
                         HitType = ScoreHitType.ChordDragHandle,
                         MeasureIndex = bounds.MeasureIndex,
                         ChordMarkerIndex = bounds.MarkerIndex,
-                        Bounds = bounds.DragHandleBounds
+                        Bounds = bounds.DragHandleBounds.ToIntRect()
                     };
                 }
 
@@ -919,7 +919,7 @@ namespace JianpuEditor.Rendering
                         HitType = ScoreHitType.ChordMarker,
                         MeasureIndex = bounds.MeasureIndex,
                         ChordMarkerIndex = bounds.MarkerIndex,
-                        Bounds = bounds.TextBoxBounds
+                        Bounds = bounds.TextBoxBounds.ToIntRect()
                     };
                 }
             }
@@ -938,7 +938,7 @@ namespace JianpuEditor.Rendering
                 {
                     HitType = ScoreHitType.ChordRow,
                     MeasureIndex = measure.MeasureIndex,
-                    Bounds = bounds
+                    Bounds = bounds.ToIntRect()
                 };
             }
 
@@ -953,7 +953,7 @@ namespace JianpuEditor.Rendering
                     {
                         HitType = ScoreHitType.ChordAddSlot,
                         MeasureIndex = measure.MeasureIndex,
-                        Bounds = bounds
+                        Bounds = bounds.ToIntRect()
                     };
                 }
             }
@@ -962,7 +962,7 @@ namespace JianpuEditor.Rendering
             {
                 HitType = ScoreHitType.ChordRow,
                 MeasureIndex = measure.MeasureIndex,
-                Bounds = bounds
+                Bounds = bounds.ToIntRect()
             };
         }
 

@@ -1,5 +1,3 @@
-using System.Drawing;
-
 namespace JianpuEditor.Models
 {
     public enum ScoreHitType
@@ -34,6 +32,6 @@ namespace JianpuEditor.Models
         /// <summary>Index in Measure.ChordMarkers when HitType is chord-related.</summary>
         public int ChordMarkerIndex { get; set; } = -1;
 
-        public Rectangle Bounds { get; set; } = Rectangle.Empty;
+        public IntRect Bounds { get; set; } = IntRect.Empty;
     }
 }

@@ -7,11 +7,13 @@ using System.Windows.Forms;
 using JianpuEditor.Controls;
 using JianpuEditor.Models;
 using JianpuEditor.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace JianpuEditor
 {
     public sealed class MainForm : Form
     {
+        private readonly IServiceProvider _serviceProvider;
         private readonly ScoreCanvas _canvas = new ScoreCanvas();
         private readonly TextBox _titleBox = new TextBox();
         private readonly TextBox _keyBox = new TextBox();
@@ -38,8 +40,9 @@ namespace JianpuEditor
         private ContextMenuStrip _sampleLibraryMenu;
         private readonly ScorePlaybackService _playbackService = new ScorePlaybackService();
 
-        public MainForm()
+        public MainForm(IServiceProvider serviceProvider)
         {
+            _serviceProvider = serviceProvider;
             Text = "简谱编辑器";
             Width = 1280;
             Height = 820;

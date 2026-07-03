@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Windows.Forms;
 using JianpuEditor.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace JianpuEditor
 {
@@ -16,7 +17,9 @@ namespace JianpuEditor
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+
+            var services = AppBootstrapper.ConfigureServices();
+            Application.Run(services.GetRequiredService<MainForm>());
         }
 
         private static void OnThreadException(object sender, ThreadExceptionEventArgs e)

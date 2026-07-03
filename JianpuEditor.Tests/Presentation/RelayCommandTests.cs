@@ -1,4 +1,4 @@
-using JianpuEditor.Presentation;
+using CommunityToolkit.Mvvm.Input;
 using Xunit;
 
 namespace JianpuEditor.Tests.Presentation

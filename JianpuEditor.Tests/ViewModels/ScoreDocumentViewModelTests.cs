@@ -1,3 +1,4 @@
+using JianpuEditor.Services;
 using JianpuEditor.ViewModels;
 using Xunit;
 
@@ -8,7 +9,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void Title_ChangeMarksDocumentDirty()
         {
-            var viewModel = new ScoreDocumentViewModel();
+            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter());
 
             viewModel.Title = "Test Title";
 
@@ -19,7 +20,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void ResetAsNew_ClearsDirtyState()
         {
-            var viewModel = new ScoreDocumentViewModel();
+            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter());
             viewModel.Title = "Dirty";
 
             viewModel.ResetAsNew();
