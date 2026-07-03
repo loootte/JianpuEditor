@@ -1,8 +1,10 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
+using JianpuEditor.Services;
 using JianpuEditor.Services.EditCommands;
 
 namespace JianpuEditor.ViewModels
@@ -26,7 +28,10 @@ namespace JianpuEditor.ViewModels
             _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             _history = history ?? throw new ArgumentNullException(nameof(history));
+            AlignLyricsCommand = new RelayCommand(() => AlignLyricsToNotes());
         }
+
+        public RelayCommand AlignLyricsCommand { get; }
 
         public string CurrentLyricText
         {
@@ -85,6 +90,41 @@ namespace JianpuEditor.ViewModels
         {
             LoadFromMeasure(measureIndex);
             return ScoreEditResult.WithMessage("已更新小节文字");
+        }
+
+        public ScoreEditResult AlignLyricsToNotes()
+        {
+            _document.EnsureMeasures();
+            var measureIndex = Math.Max(0, Math.Min(_navigation.CurrentMeasureIndex, _document.Score.Measures.Count - 1));
+            var measure = _document.Score.Measures[measureIndex];
+            var lyricText = measure.LyricText ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(lyricText))
+            {
+                lyricText = _currentLyricText ?? string.Empty;
+            }
+
+            if (!LyricAlignmentService.TryBuildAlignment(
+                    measure,
+                    lyricText,
+                    _document.Score.Ties,
+                    measureIndex,
+                    out var syllables,
+                    out var message))
+            {
+                _messenger.Send(new StatusChangedMessage(message));
+                return ScoreEditResult.Unchanged;
+            }
+
+            var command = new AlignLyricSyllablesCommand(
+                _document.Score,
+                _messenger,
+                measureIndex,
+                measure.LyricSyllables,
+                measure.LyricText,
+                syllables,
+                message);
+            _history.Execute(command);
+            return command.Result ?? ScoreEditResult.Unchanged;
         }
     }
 }
