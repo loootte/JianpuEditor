@@ -16,7 +16,8 @@ namespace JianpuEditor.Services
             {
                 LyricText = source.LyricText ?? string.Empty,
                 MelodyNotes = new List<JianpuNote>(),
-                ChordMarkers = new List<ChordMarker>()
+                ChordMarkers = new List<ChordMarker>(),
+                LyricSyllables = new List<LyricSyllable>()
             };
 
             if (source.MelodyNotes != null)
@@ -35,6 +36,19 @@ namespace JianpuEditor.Services
                     {
                         Text = marker.Text ?? string.Empty,
                         BeatPosition = marker.BeatPosition
+                    });
+                }
+            }
+
+            if (source.LyricSyllables != null)
+            {
+                foreach (var syllable in source.LyricSyllables)
+                {
+                    clone.LyricSyllables.Add(new LyricSyllable
+                    {
+                        Text = syllable.Text ?? string.Empty,
+                        NoteIndex = syllable.NoteIndex,
+                        BeatPosition = syllable.BeatPosition
                     });
                 }
             }
