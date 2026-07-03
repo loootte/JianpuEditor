@@ -250,6 +250,7 @@ namespace JianpuEditor
                 (s, e) => ExecuteAddMeasureWithPlaceholders()));
             editMenu.DropDownItems.Add(CreateMenuItem("复制小节", Keys.None, (s, e) => ExecuteDuplicateMeasures()));
             editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
+            editMenu.DropDownItems.Add(CreateMenuItem("批量编辑歌词...", Keys.None, (s, e) => ShowBulkLyricEditDialog()));
             editMenu.DropDownItems.Add(CreateMenuItem("清空谱面", Keys.None, OnClearScore));
 
             var viewMenu = new ToolStripMenuItem("视图");
@@ -1088,6 +1089,33 @@ namespace JianpuEditor
             _glue?.Dispose();
             _binder?.Dispose();
             _viewModel.Dispose();
+        }
+
+        private void ShowBulkLyricEditDialog()
+        {
+            _viewModel.Document.EnsureMeasures();
+            var measureCount = Math.Max(1, _viewModel.Document.Score.Measures.Count);
+            var range = _viewModel.Selection.GetMeasureRangeIndices();
+            var fromMeasure = Math.Max(1, Math.Min(measureCount, range.fromIndex + 1));
+            var toMeasure = Math.Max(1, Math.Min(measureCount, range.toIndex + 1));
+
+            using (var dialog = new BulkLyricEditDialog(
+                measureCount,
+                fromMeasure,
+                toMeasure,
+                (fromIndex, toIndex) => _viewModel.MeasureContent.GetLyricTextsForRange(fromIndex, toIndex)))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                ExecuteScoreEdit(() => _viewModel.MeasureContent.ApplyBulkLyrics(
+                    dialog.FromMeasure - 1,
+                    dialog.ToMeasure - 1,
+                    dialog.LyricLines,
+                    dialog.Realign));
+            }
         }
 
         private void ShowTransposeDialog()

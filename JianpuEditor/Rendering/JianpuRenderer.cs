@@ -413,6 +413,34 @@ namespace JianpuEditor.Rendering
                 MelodyRowHeight);
         }
 
+        public static bool TryGetSyllableAnchorX(
+            MeasureLayout layout,
+            JianpuMeasure measure,
+            LyricSyllable syllable,
+            out float centerX)
+        {
+            centerX = 0;
+            if (layout == null || measure == null || syllable == null || string.IsNullOrEmpty(syllable.Text))
+            {
+                return false;
+            }
+
+            var noteIndex = LyricSyllableService.ResolveNoteIndex(measure, syllable);
+            var noteCount = measure.MelodyNotes?.Count ?? 0;
+            if (noteIndex < 0 || noteIndex >= noteCount)
+            {
+                return false;
+            }
+
+            var melodyScale = layout.MelodyScale;
+            var minDrawWidth = melodyScale < 0.999
+                ? Math.Max(6, (int)Math.Round(MinNoteWidth * melodyScale))
+                : MinNoteWidth;
+            GetNoteDrawBounds(layout, noteIndex, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
+            centerX = GetNoteHeadCenterX(noteX, noteWidth);
+            return true;
+        }
+
         public static Rectangle GetTextCellBounds(MeasureLayout measure, int rowTop, int rowHeight)
         {
             return new Rectangle(measure.X + 4, rowTop + 2, measure.Width - 8, rowHeight - 4);
@@ -671,12 +699,13 @@ namespace JianpuEditor.Rendering
                     selectedChordMeasureIndex,
                     selectedChordMarkerIndex,
                     layoutOptions);
+                var hasStructuredLyrics = LyricSyllableService.HasStructuredLyrics(measureData);
                 DrawLyricRow(
                     g,
-                    measureData.LyricText,
+                    measureData,
                     measure,
                     isSelectedMeasure,
-                    string.IsNullOrWhiteSpace(measureData.LyricText));
+                    !hasStructuredLyrics && string.IsNullOrWhiteSpace(measureData.LyricText));
                 DrawBarLine(g, measure.X, measure.BlockTop, StaffBlockHeight);
                 DrawBarLine(g, measure.BarLineX, measure.BlockTop, StaffBlockHeight);
             }
@@ -1313,7 +1342,7 @@ namespace JianpuEditor.Rendering
 
         private void DrawLyricRow(
             Graphics g,
-            string text,
+            JianpuMeasure measureData,
             MeasureLayout layout,
             bool isSelectedMeasure,
             bool isEmpty)
@@ -1323,7 +1352,80 @@ namespace JianpuEditor.Rendering
             var fontSize = Math.Max(8f, LyricBaseFontSize * (float)layout.MelodyScale);
             using (var font = new Font("Arial", fontSize, FontStyle.Bold))
             {
+                if (LyricSyllableService.HasStructuredLyrics(measureData))
+                {
+                    DrawStructuredLyricRow(g, measureData, layout, bounds, rowTop, isSelectedMeasure, isEmpty, font);
+                    return;
+                }
+
+                var text = measureData.LyricText ?? string.Empty;
                 DrawTextRowCore(g, text, bounds, isSelectedMeasure, isEmpty, font, StringAlignment.Near);
+            }
+        }
+
+        private void DrawStructuredLyricRow(
+            Graphics g,
+            JianpuMeasure measureData,
+            MeasureLayout layout,
+            Rectangle bounds,
+            int rowTop,
+            bool isSelectedMeasure,
+            bool isEmpty,
+            Font font)
+        {
+            if (isSelectedMeasure && isEmpty)
+            {
+                using (var pen = new Pen(Color.FromArgb(180, 180, 180)) { DashStyle = DashStyle.Dot })
+                {
+                    g.DrawRectangle(pen, bounds);
+                }
+            }
+
+            var melodyScale = layout.MelodyScale;
+            var minDrawWidth = melodyScale < 0.999
+                ? Math.Max(6, (int)Math.Round(MinNoteWidth * melodyScale))
+                : MinNoteWidth;
+            var noteCount = measureData.MelodyNotes?.Count ?? 0;
+            foreach (var syllable in measureData.LyricSyllables)
+            {
+                if (string.IsNullOrEmpty(syllable?.Text))
+                {
+                    continue;
+                }
+
+                var noteIndex = LyricSyllableService.ResolveNoteIndex(measureData, syllable);
+                if (noteIndex < 0 || noteIndex >= noteCount)
+                {
+                    continue;
+                }
+
+                GetNoteDrawBounds(layout, noteIndex, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
+                var centerX = GetNoteHeadCenterX(noteX, noteWidth);
+                var textWidth = (int)Math.Ceiling(g.MeasureString(syllable.Text, font).Width) + 4;
+                var syllableWidth = Math.Max(12, Math.Min(noteWidth, textWidth));
+                var syllableLeft = (int)Math.Round(centerX - syllableWidth / 2f);
+                var syllableBounds = new Rectangle(
+                    syllableLeft,
+                    rowTop + 2,
+                    syllableWidth,
+                    TextRowHeight - 4);
+
+                using (var format = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center,
+                    Trimming = StringTrimming.EllipsisCharacter,
+                    FormatFlags = StringFormatFlags.NoWrap
+                })
+                using (var ink = CreateInkBrush())
+                {
+                    var rect = new RectangleF(
+                        syllableBounds.X,
+                        syllableBounds.Y,
+                        syllableBounds.Width,
+                        syllableBounds.Height);
+                    g.DrawString(syllable.Text, font, ink, rect, format);
+                }
             }
         }
 
