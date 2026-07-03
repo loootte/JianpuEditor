@@ -7,6 +7,7 @@ using JianpuEditor.Core.Messaging;
 using JianpuEditor.Glue;
 using JianpuEditor.Rendering;
 using JianpuEditor.Services;
+using JianpuEditor.Models;
 using JianpuEditor.ViewModels;
 using JianpuEditor.Views;
 
@@ -23,13 +24,7 @@ namespace JianpuEditor
         private TableLayoutPanel _mainLayout;
         private TableLayoutPanel _chromeLayout;
         private readonly ScoreCanvas _canvas = new ScoreCanvas();
-        private readonly TextBox _titleBox = new TextBox();
-        private readonly TextBox _keyBox = new TextBox();
-        private readonly TextBox _tempoBox = new TextBox();
-        private readonly NumericUpDown _bpmBox = new NumericUpDown();
-        private readonly TextBox _composerBox = new TextBox();
         private readonly TextBox _chordBox = new TextBox();
-        private readonly TextBox _lyricBox = new TextBox();
         private readonly NumericUpDown _measureSelector = new NumericUpDown();
         private readonly NumericUpDown _measureRangeFrom = new NumericUpDown();
         private readonly NumericUpDown _measureRangeTo = new NumericUpDown();
@@ -66,13 +61,7 @@ namespace JianpuEditor
             _binder = new MainFormViewBinder(
                 mainViewModel,
                 this,
-                _titleBox,
-                _keyBox,
-                _tempoBox,
-                _bpmBox,
-                _composerBox,
                 _chordBox,
-                _lyricBox,
                 _measureSelector,
                 _measureRangeFrom,
                 _measureRangeTo,
@@ -85,6 +74,7 @@ namespace JianpuEditor
 
             _canvas.SelectionChanged += OnCanvasSelectionChanged;
             _canvas.MeasureTextEdited += OnCanvasMeasureTextEdited;
+            _canvas.HeaderEdited += OnCanvasHeaderEdited;
             _canvas.ChordMarkersChanged += OnCanvasChordMarkersChanged;
             _canvas.PlaybackSeeked += OnCanvasPlaybackSeeked;
 
@@ -110,7 +100,6 @@ namespace JianpuEditor
         private void SetupLayoutStructure()
         {
             _menuStrip = BuildMenuStrip();
-            var headerPanel = BuildHeaderPanel();
             var toolbarPanel = BuildToolbarPanel();
             ConfigureStatusLabel();
 
@@ -118,23 +107,20 @@ namespace JianpuEditor
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 3,
+                RowCount = 2,
                 AutoSize = false,
                 Padding = new Padding(0),
                 Margin = new Padding(0)
             };
             _chromeLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             _chromeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, MainFormLayoutContext.MinimumMenuHeight));
-            _chromeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, MainFormLayoutContext.HeaderRowHeight));
             _chromeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, MainFormLayoutContext.DefaultToolbarHeight));
 
             _menuStrip.Dock = DockStyle.Fill;
-            headerPanel.Dock = DockStyle.Fill;
             toolbarPanel.Dock = DockStyle.Fill;
 
             _chromeLayout.Controls.Add(_menuStrip, 0, 0);
-            _chromeLayout.Controls.Add(headerPanel, 0, 1);
-            _chromeLayout.Controls.Add(toolbarPanel, 0, 2);
+            _chromeLayout.Controls.Add(toolbarPanel, 0, 1);
 
             _mainLayout = new TableLayoutPanel
             {
@@ -168,7 +154,6 @@ namespace JianpuEditor
                 MainLayout = _mainLayout,
                 ChromeLayout = _chromeLayout,
                 MenuStrip = _menuStrip,
-                HeaderPanel = headerPanel,
                 ToolbarPanel = toolbarPanel,
                 ScoreCanvas = _canvas,
                 StatusLabel = _statusLabel
@@ -190,7 +175,7 @@ namespace JianpuEditor
             _glue.ResetPlaybackHead();
             _binder.SyncHeaderFromDocument();
             _binder.SyncFromViewModels();
-            _viewModel.SetStatus("就绪 - 点击音符修改，副旋律行可添加/拖动和弦标识，点击歌词行编辑文字");
+            _viewModel.SetStatus("就绪 - 点击谱面标题/调号/速度/BPM/作曲直接编辑，点击歌词行编辑文字");
         }
 
         private void OnFormResize(object sender, EventArgs e)
@@ -245,48 +230,6 @@ namespace JianpuEditor
             menu.Items.Add(editMenu);
             menu.Items.Add(viewMenu);
             return menu;
-        }
-
-        private TableLayoutPanel BuildHeaderPanel()
-        {
-            var panel = new TableLayoutPanel
-            {
-                Padding = new Padding(12, 8, 12, 8),
-                ColumnCount = 10
-            };
-
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-            _titleBox.Dock = DockStyle.Fill;
-            _keyBox.Dock = DockStyle.Fill;
-            _tempoBox.Dock = DockStyle.Fill;
-            _composerBox.Dock = DockStyle.Fill;
-            _bpmBox.Dock = DockStyle.Fill;
-            _bpmBox.Minimum = 30;
-            _bpmBox.Maximum = 300;
-            _bpmBox.Value = 120;
-
-            panel.Controls.Add(new Label { Text = "标题", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 0, 0);
-            panel.Controls.Add(_titleBox, 1, 0);
-            panel.Controls.Add(new Label { Text = "调号", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 2, 0);
-            panel.Controls.Add(_keyBox, 3, 0);
-            panel.Controls.Add(new Label { Text = "速度", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 4, 0);
-            panel.Controls.Add(_tempoBox, 5, 0);
-            panel.Controls.Add(new Label { Text = "BPM", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 6, 0);
-            panel.Controls.Add(_bpmBox, 7, 0);
-            panel.Controls.Add(new Label { Text = "作曲", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 8, 0);
-            panel.Controls.Add(_composerBox, 9, 0);
-
-            return panel;
         }
 
         private FlowLayoutPanel BuildToolbarPanel()
@@ -350,15 +293,9 @@ namespace JianpuEditor
             panel.Controls.Add(CreateToolButton("复制小节", ExecuteDuplicateMeasures));
             panel.Controls.Add(CreateSeparator());
 
-            panel.Controls.Add(new Label { Text = "和弦:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
             _chordBox.Width = 120;
             _chordBox.TextChanged += OnChordTextChanged;
             panel.Controls.Add(_chordBox);
-
-            panel.Controls.Add(new Label { Text = "歌词:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
-            _lyricBox.Width = 160;
-            _lyricBox.TextChanged += OnLyricTextChanged;
-            panel.Controls.Add(_lyricBox);
 
             panel.Controls.Add(CreateSeparator());
             panel.Controls.Add(CreateToolButton("删除", ExecuteDelete));
@@ -519,14 +456,39 @@ namespace JianpuEditor
             _canvas.UpdateSelectedChordText(_chordBox.Text);
         }
 
-        private void OnLyricTextChanged(object sender, EventArgs e)
+        private void OnCanvasHeaderEdited(object sender, ScoreHeaderEditedEventArgs e)
         {
-            if (_binder.SuppressMeasureTextSync)
+            if (e == null)
             {
                 return;
             }
 
-            _viewModel.MeasureContent.CurrentLyricText = _lyricBox.Text;
+            var text = e.Text ?? string.Empty;
+            switch (e.Field)
+            {
+                case ScoreHeaderField.Title:
+                    _viewModel.Document.Title = text;
+                    break;
+                case ScoreHeaderField.KeySignature:
+                    _viewModel.Document.KeySignature = text;
+                    break;
+                case ScoreHeaderField.Tempo:
+                    _viewModel.Document.Tempo = text;
+                    break;
+                case ScoreHeaderField.Bpm:
+                    if (int.TryParse(text.Trim(), out var bpm))
+                    {
+                        _viewModel.Document.Bpm = Math.Max(30, Math.Min(300, bpm));
+                    }
+
+                    break;
+                case ScoreHeaderField.Composer:
+                    _viewModel.Document.Composer = text;
+                    break;
+            }
+
+            _binder.SyncHeaderFromDocument();
+            _binder.SyncFromViewModels();
         }
 
         private void OnCanvasSelectionChanged(object sender, ScoreSelectionChangedEventArgs e)

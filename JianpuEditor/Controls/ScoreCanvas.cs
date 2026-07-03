@@ -52,9 +52,13 @@ namespace JianpuEditor.Controls
         private readonly JianpuRenderer _renderer = new JianpuRenderer();
         private readonly Panel _contentPanel;
         private readonly Font _inlineTextFont = new Font("Arial", 20f, FontStyle.Bold);
+        private readonly Font _headerTitleFont = new Font("Microsoft YaHei", 20f, FontStyle.Bold);
+        private readonly Font _headerMetaFont = new Font("Microsoft YaHei", 11f, FontStyle.Regular);
         private JianpuScore _score = new JianpuScore();
         private TextBox _inlineEditor;
+        private TextBox _headerEditor;
         private TextBox _chordInlineEditor;
+        private ScoreHeaderField _editingHeaderField = ScoreHeaderField.None;
         private int _editingChordMeasureIndex = -1;
         private int _editingChordMarkerIndex = -1;
         private int _selectedMeasureIndex = -1;
@@ -112,6 +116,8 @@ namespace JianpuEditor.Controls
 
         public event EventHandler MeasureTextEdited;
 
+        public event EventHandler<ScoreHeaderEditedEventArgs> HeaderEdited;
+
         public event EventHandler ChordMarkersChanged;
 
         public event Action<double> PlaybackSeeked;
@@ -122,6 +128,7 @@ namespace JianpuEditor.Controls
             set
             {
                 CommitInlineEdit();
+                CommitHeaderInlineEdit();
                 _score = value ?? new JianpuScore();
                 if (_score.Measures == null || _score.Measures.Count == 0)
                 {
@@ -677,6 +684,17 @@ namespace JianpuEditor.Controls
                 CommitInlineEdit();
             }
 
+            if (_headerEditor != null)
+            {
+                var headerBounds = _headerEditor.Bounds;
+                if (headerBounds.Contains(e.Location))
+                {
+                    return;
+                }
+
+                CommitHeaderInlineEdit();
+            }
+
             var hit = _renderer.HitTest(_score, GetDrawWidth(), e.Location);
             if (hit.HitType == ScoreHitType.None)
             {
@@ -747,6 +765,9 @@ namespace JianpuEditor.Controls
                     SelectSingleMeasure(hit.MeasureIndex, false);
                     RaiseSelectionChanged();
                     StartInlineEdit(hit.MeasureIndex, hit.Bounds.ToRectangle());
+                    break;
+                case ScoreHitType.ScoreHeader:
+                    StartHeaderInlineEdit(hit.HeaderField, hit.Bounds.ToRectangle());
                     break;
                 default:
                     HandleMeasureSelectionClick(hit.MeasureIndex);
@@ -856,6 +877,100 @@ namespace JianpuEditor.Controls
             }
         }
 
+        private void StartHeaderInlineEdit(ScoreHeaderField field, Rectangle bounds)
+        {
+            CommitInlineEdit();
+
+            if (field == ScoreHeaderField.None)
+            {
+                return;
+            }
+
+            _editingHeaderField = field;
+            var text = _renderer.GetHeaderFieldText(_score, field);
+            var font = field == ScoreHeaderField.Title ? _headerTitleFont : _headerMetaFont;
+
+            _headerEditor = new TextBox
+            {
+                Bounds = bounds,
+                Text = text ?? string.Empty,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = font,
+                BackColor = AppTheme.InlineEditorBackground,
+                ForeColor = AppTheme.PrimaryText
+            };
+            _headerEditor.KeyDown += OnHeaderEditorKeyDown;
+            _headerEditor.LostFocus += OnHeaderEditorLostFocus;
+            _contentPanel.Controls.Add(_headerEditor);
+            _headerEditor.BringToFront();
+            _headerEditor.Focus();
+            _headerEditor.SelectAll();
+        }
+
+        private void OnHeaderEditorKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                CommitHeaderInlineEdit();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                CancelHeaderInlineEdit();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+        }
+
+        private void OnHeaderEditorLostFocus(object sender, EventArgs e)
+        {
+            if (_headerEditor == null || _headerEditor.Focused)
+            {
+                return;
+            }
+
+            CommitHeaderInlineEdit();
+        }
+
+        private void CommitHeaderInlineEdit()
+        {
+            if (_headerEditor == null || _editingHeaderField == ScoreHeaderField.None)
+            {
+                return;
+            }
+
+            var field = _editingHeaderField;
+            var text = _headerEditor.Text ?? string.Empty;
+            RemoveHeaderEditor();
+            HeaderEdited?.Invoke(this, new ScoreHeaderEditedEventArgs
+            {
+                Field = field,
+                Text = text
+            });
+            RefreshScore();
+        }
+
+        private void CancelHeaderInlineEdit()
+        {
+            RemoveHeaderEditor();
+            RefreshScore();
+        }
+
+        private void RemoveHeaderEditor()
+        {
+            if (_headerEditor != null)
+            {
+                _headerEditor.KeyDown -= OnHeaderEditorKeyDown;
+                _headerEditor.LostFocus -= OnHeaderEditorLostFocus;
+                _contentPanel.Controls.Remove(_headerEditor);
+                _headerEditor.Dispose();
+                _headerEditor = null;
+            }
+
+            _editingHeaderField = ScoreHeaderField.None;
+        }
+
         private void StartInlineEdit(int measureIndex, Rectangle bounds)
         {
             CommitInlineEdit();
@@ -913,6 +1028,7 @@ namespace JianpuEditor.Controls
 
         private void CommitInlineEdit()
         {
+            CommitHeaderInlineEdit();
             CommitChordInlineEdit();
             if (_inlineEditor == null || _editingMeasureIndex < 0)
             {
@@ -1331,9 +1447,12 @@ namespace JianpuEditor.Controls
             {
                 AppTheme.ThemeChanged -= OnThemeChanged;
                 _inlineEditor?.Dispose();
+                _headerEditor?.Dispose();
                 _chordInlineEditor?.Dispose();
                 _scoreBitmap?.Dispose();
                 _inlineTextFont?.Dispose();
+                _headerTitleFont?.Dispose();
+                _headerMetaFont?.Dispose();
                 _renderer?.Dispose();
             }
 

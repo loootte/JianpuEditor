@@ -5,7 +5,6 @@ namespace JianpuEditor.Views
 {
     public sealed class MainFormLayoutContext
     {
-        public const int HeaderRowHeight = 88;
         public const int StatusRowHeight = 28;
         public const int DefaultToolbarHeight = 160;
         public const int MinimumToolbarHeight = 80;
@@ -18,8 +17,6 @@ namespace JianpuEditor.Views
         public TableLayoutPanel ChromeLayout { get; set; }
 
         public MenuStrip MenuStrip { get; set; }
-
-        public TableLayoutPanel HeaderPanel { get; set; }
 
         public FlowLayoutPanel ToolbarPanel { get; set; }
 

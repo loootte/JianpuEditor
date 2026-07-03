@@ -107,10 +107,9 @@ namespace JianpuEditor.Views
             var toolbarHeight = MeasureToolbarHeight(toolbar, clientWidth);
 
             chrome.RowStyles[0] = new RowStyle(SizeType.Absolute, menuHeight);
-            chrome.RowStyles[1] = new RowStyle(SizeType.Absolute, MainFormLayoutContext.HeaderRowHeight);
-            chrome.RowStyles[2] = new RowStyle(SizeType.Absolute, toolbarHeight);
+            chrome.RowStyles[1] = new RowStyle(SizeType.Absolute, toolbarHeight);
 
-            var chromeHeight = menuHeight + MainFormLayoutContext.HeaderRowHeight + toolbarHeight + chrome.Padding.Vertical;
+            var chromeHeight = menuHeight + toolbarHeight + chrome.Padding.Vertical;
             chrome.Height = chromeHeight;
             chrome.MinimumSize = new Size(0, chromeHeight);
         }
@@ -161,7 +160,6 @@ namespace JianpuEditor.Views
                 || context.MainLayout == null
                 || context.ChromeLayout == null
                 || context.MenuStrip == null
-                || context.HeaderPanel == null
                 || context.ToolbarPanel == null
                 || context.ScoreCanvas == null
                 || context.StatusLabel == null)

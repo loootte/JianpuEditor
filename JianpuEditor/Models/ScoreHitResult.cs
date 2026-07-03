@@ -12,7 +12,8 @@ namespace JianpuEditor.Models
         ChordAddSlot,
         ChordRow,
         LyricText,
-        Measure
+        Measure,
+        ScoreHeader
     }
 
     public sealed class ScoreHitResult
@@ -33,5 +34,7 @@ namespace JianpuEditor.Models
         public int ChordMarkerIndex { get; set; } = -1;
 
         public IntRect Bounds { get; set; } = IntRect.Empty;
+
+        public ScoreHeaderField HeaderField { get; set; } = ScoreHeaderField.None;
     }
 }

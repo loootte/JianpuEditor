@@ -106,6 +106,16 @@ namespace JianpuEditor.Glue
             if (e.PropertyName == nameof(ScoreDocumentViewModel.Score))
             {
                 AttachDocumentScore();
+                return;
+            }
+
+            if (e.PropertyName == nameof(ScoreDocumentViewModel.Title)
+                || e.PropertyName == nameof(ScoreDocumentViewModel.KeySignature)
+                || e.PropertyName == nameof(ScoreDocumentViewModel.Tempo)
+                || e.PropertyName == nameof(ScoreDocumentViewModel.Bpm)
+                || e.PropertyName == nameof(ScoreDocumentViewModel.Composer))
+            {
+                RefreshCanvas();
             }
         }
 
