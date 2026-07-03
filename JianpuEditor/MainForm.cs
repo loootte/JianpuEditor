@@ -49,8 +49,8 @@ namespace JianpuEditor
             KeyDown += OnFormKeyDown;
 
             BuildMenu();
-            BuildHeader();
             BuildToolbar();
+            BuildHeader();
             BuildFooter();
             BuildCanvas();
 
@@ -96,16 +96,11 @@ namespace JianpuEditor
             _binder.SyncFromViewModels();
             _viewModel.SetStatus("就绪 - 点击音符修改，副旋律行可添加/拖动和弦标识，点击歌词行编辑文字");
             WinFormsThemeApplier.Apply(this, _canvas);
-            _menuStrip?.BringToFront();
         }
 
         private void BuildMenu()
         {
-            _menuStrip = new MenuStrip
-            {
-                Dock = DockStyle.Top,
-                Visible = true
-            };
+            _menuStrip = new MenuStrip();
             var menu = _menuStrip;
 
             var fileMenu = new ToolStripMenuItem("文件");
@@ -143,7 +138,6 @@ namespace JianpuEditor
             menu.Items.Add(fileMenu);
             menu.Items.Add(editMenu);
             menu.Items.Add(viewMenu);
-            Controls.Add(menu);
             MainMenuStrip = menu;
         }
 
@@ -328,7 +322,6 @@ namespace JianpuEditor
         {
             AppTheme.SetDarkMode(_darkModeMenuItem.Checked);
             WinFormsThemeApplier.Apply(this, _canvas);
-            _menuStrip?.BringToFront();
             _binder.SyncFromViewModels();
         }
 
