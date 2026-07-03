@@ -52,6 +52,8 @@
 ```powershell
 dotnet build JianpuEditor.sln -c Debug
 dotnet test JianpuEditor.sln -c Debug   # 需要 .NET 8 SDK
+.\scripts\check-format.ps1             # 代码格式检查（CI 同款）
+dotnet format JianpuEditor/JianpuEditor.csproj   # 自动修复格式
 .\JianpuEditor\bin\Debug\net472\JianpuEditor.exe
 ```
 
@@ -78,7 +80,7 @@ GitHub Actions 工作流位于 `.github/workflows/`：
 
 | 工作流 | 触发 | 说明 |
 |--------|------|------|
-| **CI** | `main` 分支 push / PR | Release 构建 + 单元测试 + MIDI 导出冒烟测试，上传构建产物（含 NuGet / .NET 构建缓存） |
+| **CI** | `main` 分支 push / PR | `dotnet format` 检查 + Release 构建 + 单元测试 + MIDI 冒烟测试（含 NuGet / .NET 缓存） |
 | **Release** | 推送标签 `v*` 或手动运行 | 构建安装包（`.exe` + `.zip`），标签发布时自动创建 GitHub Release |
 
 ### 发布新版本

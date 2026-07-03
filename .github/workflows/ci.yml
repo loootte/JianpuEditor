@@ -38,6 +38,10 @@ jobs:
       - name: Restore
         run: dotnet restore JianpuEditor.sln
 
+      - name: Check code format
+        shell: pwsh
+        run: ./scripts/check-format.ps1
+
       - name: Build Debug
         run: dotnet build JianpuEditor.sln -c Debug --no-restore
 
