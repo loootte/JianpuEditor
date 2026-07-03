@@ -43,6 +43,7 @@ namespace JianpuEditor
         private ToolStripMenuItem _darkModeMenuItem;
         private ToolStripMenuItem _undoMenuItem;
         private ToolStripMenuItem _redoMenuItem;
+        private UndoRedoMessageFilter _undoRedoMessageFilter;
 
         public MainForm(
             MainViewModel viewModel,
@@ -85,6 +86,7 @@ namespace JianpuEditor
                 _stopButton);
 
             _glue = new ScoreCanvasGlue(mainViewModel, _canvas, _messenger);
+            mainViewModel.Document.PropertyChanged += OnDocumentPropertyChanged;
 
             _canvas.SelectionChanged += OnCanvasSelectionChanged;
             _canvas.MeasureTextEdited += OnCanvasMeasureTextEdited;
@@ -179,6 +181,10 @@ namespace JianpuEditor
         private void OnFormLoad(object sender, EventArgs e)
         {
             InitializeBindings(_viewModel);
+            _undoRedoMessageFilter = new UndoRedoMessageFilter(
+                () => TryExecuteUndo("MessageFilter"),
+                () => TryExecuteRedo("MessageFilter"));
+            Application.AddMessageFilter(_undoRedoMessageFilter);
             RestoreLayout();
             ApplyDpiScaling();
             ApplyTheme();
@@ -229,10 +235,10 @@ namespace JianpuEditor
             fileMenu.DropDownItems.Add(CreateMenuItem("退出", Keys.None, (s, e) => Close()));
 
             var editMenu = new ToolStripMenuItem("编辑");
-            _undoMenuItem = CreateMenuItem("撤回", Keys.Control | Keys.Z, (s, e) => ExecuteUndo());
+            _undoMenuItem = CreateMenuItem("撤回", Keys.Control | Keys.Z, (s, e) => TryExecuteUndo("Menu"));
             _undoMenuItem.Enabled = false;
             editMenu.DropDownItems.Add(_undoMenuItem);
-            _redoMenuItem = CreateMenuItem("重做", Keys.Control | Keys.Y, (s, e) => ExecuteRedo());
+            _redoMenuItem = CreateMenuItem("重做", Keys.Control | Keys.Y, (s, e) => TryExecuteRedo("Menu"));
             _redoMenuItem.Enabled = false;
             editMenu.DropDownItems.Add(_redoMenuItem);
             editMenu.DropDownItems.Add(CreateMenuItem("新增小节", Keys.None, (s, e) => ExecuteAddMeasure()));
@@ -415,6 +421,8 @@ namespace JianpuEditor
 
         private void ExecuteTrackedEdit(Func<ScoreEditResult> action, bool refreshUndoMenu)
         {
+            DiscardPendingCanvasMutation();
+            _glue?.AttachDocumentScore();
             _suppressCanvasMutationTracking = true;
             try
             {
@@ -443,14 +451,12 @@ namespace JianpuEditor
         {
             if (keyData == (Keys.Control | Keys.Z))
             {
-                ExecuteUndo();
-                return true;
+                return TryExecuteUndo("ProcessCmdKey") || base.ProcessCmdKey(ref msg, keyData);
             }
 
             if (keyData == (Keys.Control | Keys.Y))
             {
-                ExecuteRedo();
-                return true;
+                return TryExecuteRedo("ProcessCmdKey") || base.ProcessCmdKey(ref msg, keyData);
             }
 
             return base.ProcessCmdKey(ref msg, keyData);
@@ -471,13 +477,32 @@ namespace JianpuEditor
             ExecuteScoreEdit(() => _viewModel.ScoreEditor.Delete());
         }
 
-        private void ExecuteUndo()
+        private bool TryExecuteUndo(string source)
         {
+            LogUndoRedoAttempt("Undo", source);
             if (!_commandHistory.CanUndo)
             {
-                return;
+                return true;
             }
 
+            ExecuteUndo();
+            return true;
+        }
+
+        private bool TryExecuteRedo(string source)
+        {
+            LogUndoRedoAttempt("Redo", source);
+            if (!_commandHistory.CanRedo)
+            {
+                return true;
+            }
+
+            ExecuteRedo();
+            return true;
+        }
+
+        private void ExecuteUndo()
+        {
             _commandHistory.Undo();
             _viewModel.SetStatus("已撤回");
             _glue.SyncAfterHistoryChange(CreateHistoryRefreshResult());
@@ -488,17 +513,28 @@ namespace JianpuEditor
 
         private void ExecuteRedo()
         {
-            if (!_commandHistory.CanRedo)
-            {
-                return;
-            }
-
             _commandHistory.Redo();
             _viewModel.SetStatus("已重做");
             _glue.SyncAfterHistoryChange(CreateHistoryRefreshResult());
             _binder.SyncHeaderFromDocument();
             _binder.SyncFromViewModels();
             UpdateUndoMenuState();
+        }
+
+        private void LogUndoRedoAttempt(string action, string source)
+        {
+            var history = _commandHistory as EditCommandHistory;
+            var instanceId = history?.InstanceId ?? _commandHistory.GetHashCode();
+            var measureCount = _viewModel.Document.Score?.Measures?.Count ?? 0;
+            var canAct = action == "Undo" ? _commandHistory.CanUndo : _commandHistory.CanRedo;
+            var count = action == "Undo" ? _commandHistory.UndoCount : _commandHistory.RedoCount;
+            var line = "[CommandHistory] #" + instanceId + " " + action + "Attempt"
+                + " | source=" + source
+                + " | " + (action == "Undo" ? "CanUndo" : "CanRedo") + "=" + canAct
+                + " | " + (action == "Undo" ? "undo" : "redo") + "(" + count + ")"
+                + " | measures=" + measureCount;
+            Console.WriteLine(line);
+            AppLog.Info(line);
         }
 
         private ScoreEditResult CreateHistoryRefreshResult()
@@ -517,20 +553,6 @@ namespace JianpuEditor
 
         private void OnFormKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Control && e.KeyCode == Keys.Z)
-            {
-                ExecuteUndo();
-                e.Handled = true;
-                return;
-            }
-
-            if (e.Control && e.KeyCode == Keys.Y)
-            {
-                ExecuteRedo();
-                e.Handled = true;
-                return;
-            }
-
             if (IsTextInputFocused())
             {
                 return;
@@ -651,6 +673,20 @@ namespace JianpuEditor
                 var result = _viewModel.MeasureContent.NotifyInlineLyricEdited(_canvas.SelectedMeasureIndex);
                 _glue.ApplyEditResult(result);
                 _binder.SyncFromViewModels();
+            }
+        }
+
+        private void DiscardPendingCanvasMutation()
+        {
+            _mutationBeforeSnapshot = null;
+            _mutationBeforeMeasureIndex = -1;
+        }
+
+        private void OnDocumentPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ScoreDocumentViewModel.Score))
+            {
+                DiscardPendingCanvasMutation();
             }
         }
 
@@ -926,6 +962,12 @@ namespace JianpuEditor
         private void OnFormClosed(object sender, FormClosedEventArgs e)
         {
             AppLog.Info("简谱编辑器退出");
+            if (_undoRedoMessageFilter != null)
+            {
+                Application.RemoveMessageFilter(_undoRedoMessageFilter);
+                _undoRedoMessageFilter = null;
+            }
+
             _glue?.Dispose();
             _binder?.Dispose();
             _viewModel.Dispose();

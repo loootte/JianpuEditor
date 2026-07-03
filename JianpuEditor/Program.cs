@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using JianpuEditor.Rendering;
@@ -18,6 +19,7 @@ namespace JianpuEditor
         private static void Main()
         {
             AllocConsole();
+            Console.OutputEncoding = Encoding.UTF8;
             Console.WriteLine("JianpuEditor 调试控制台已启用（指令栈日志）");
 
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

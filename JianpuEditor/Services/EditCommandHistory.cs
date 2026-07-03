@@ -14,6 +14,7 @@ namespace JianpuEditor.Services
         private readonly List<IEditCommand> _undoStack = new List<IEditCommand>();
         private readonly List<IEditCommand> _redoStack = new List<IEditCommand>();
         private readonly int _maxDepth;
+        private readonly int _instanceId;
 
         public EditCommandHistory(IAppMessenger messenger, int maxDepth = DefaultMaxDepth)
         {
@@ -28,7 +29,14 @@ namespace JianpuEditor.Services
             }
 
             _maxDepth = maxDepth;
+            _instanceId = GetHashCode();
             messenger.Register<EditCommandHistory, ScoreLoadedMessage>(this, OnScoreLoaded);
+            LogLifecycle("Created");
+        }
+
+        public int InstanceId
+        {
+            get { return _instanceId; }
         }
 
         public event EventHandler HistoryChanged;
@@ -99,14 +107,20 @@ namespace JianpuEditor.Services
 
         public void Clear()
         {
+            Clear("Clear");
+        }
+
+        internal void Clear(string reason)
+        {
             if (_undoStack.Count == 0 && _redoStack.Count == 0)
             {
+                LogLifecycle(reason + "(skipped: already empty)");
                 return;
             }
 
             _undoStack.Clear();
             _redoStack.Clear();
-            LogCommandStack("Clear", null);
+            LogCommandStack(reason, null);
             OnHistoryChanged();
         }
 
@@ -137,7 +151,7 @@ namespace JianpuEditor.Services
 
         private void OnScoreLoaded(EditCommandHistory recipient, ScoreLoadedMessage message)
         {
-            recipient.Clear();
+            recipient.Clear("Clear(ScoreLoadedMessage)");
         }
 
         private void OnHistoryChanged()
@@ -145,9 +159,16 @@ namespace JianpuEditor.Services
             HistoryChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        private void LogLifecycle(string action)
+        {
+            var line = "[CommandHistory] #" + _instanceId + " " + action;
+            Console.WriteLine(line);
+            AppLog.Info(line);
+        }
+
         private void LogCommandStack(string action, string commandDescription)
         {
-            var line = EditCommandHistoryDebugFormatter.Format(action, commandDescription, _undoStack, _redoStack);
+            var line = EditCommandHistoryDebugFormatter.Format(_instanceId, action, commandDescription, _undoStack, _redoStack);
             Console.WriteLine(line);
             AppLog.Info(line);
         }
@@ -155,10 +176,12 @@ namespace JianpuEditor.Services
 
     internal static class EditCommandHistoryDebugFormatter
     {
-        public static string Format(string action, string commandDescription, IReadOnlyList<IEditCommand> undoStack, IReadOnlyList<IEditCommand> redoStack)
+        public static string Format(int instanceId, string action, string commandDescription, IReadOnlyList<IEditCommand> undoStack, IReadOnlyList<IEditCommand> redoStack)
         {
             var builder = new StringBuilder();
-            builder.Append("[CommandHistory] ");
+            builder.Append("[CommandHistory] #");
+            builder.Append(instanceId);
+            builder.Append(' ');
             builder.Append(action);
             if (!string.IsNullOrEmpty(commandDescription))
             {
