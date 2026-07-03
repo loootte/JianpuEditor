@@ -181,6 +181,10 @@ JianpuEditor.Tests/        # xUnit 单元测试（核心服务与模型）
 
 MIDI 导出与谱面播放为自研实现，无第三方 MIDI 库。
 
+## 贡献
+
+欢迎通过 Issue 与 Pull Request 参与改进。提交代码前请阅读 [贡献者许可协议（CLA）](CLA.md)，并在首个 PR 中确认同意。
+
 ## 许可证
 
 本项目采用 [Apache License 2.0](LICENSE) 开源协议。
