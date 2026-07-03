@@ -15,3 +15,22 @@ dotnet_separate_import_directive_groups = false
 csharp_new_line_before_open_brace = all
 csharp_prefer_braces = true:suggestion
 csharp_style_namespace_declarations = block_scoped:suggestion
+
+# .NET Roslyn analyzers (see Directory.Build.props)
+dotnet_analyzer_diagnostic.category-Design.severity = warning
+dotnet_analyzer_diagnostic.category-Performance.severity = warning
+dotnet_analyzer_diagnostic.category-Reliability.severity = warning
+dotnet_analyzer_diagnostic.category-Security.severity = warning
+
+# WinForms desktop app: UI/log strings use fixed Chinese copy
+dotnet_diagnostic.CA1304.severity = none
+dotnet_diagnostic.CA1305.severity = none
+
+# Refactor opportunistically; do not fail builds
+dotnet_diagnostic.CA1822.severity = suggestion
+dotnet_diagnostic.CA1859.severity = suggestion
+
+[JianpuEditor.Tests/**/*.cs]
+# xUnit test naming and inline test data arrays
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1861.severity = none

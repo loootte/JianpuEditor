@@ -44,7 +44,7 @@ namespace JianpuEditor.Controls
 
         public int ChordMarkerIndex { get; set; } = -1;
 
-        public IReadOnlyList<int> SelectedMeasureIndices { get; set; } = new int[0];
+        public IReadOnlyList<int> SelectedMeasureIndices { get; set; } = Array.Empty<int>();
     }
 
     public sealed class ScoreCanvas : Panel
@@ -69,7 +69,7 @@ namespace JianpuEditor.Controls
         private bool _draggingChordMarker;
         private int _dragChordMeasureIndex = -1;
         private int _dragChordMarkerIndex = -1;
-        private IReadOnlyList<PlaybackMeasureSegment> _playbackSegments = new PlaybackMeasureSegment[0];
+        private IReadOnlyList<PlaybackMeasureSegment> _playbackSegments = Array.Empty<PlaybackMeasureSegment>();
         private double _playbackPositionQuarter;
         private bool _showPlaybackHead;
         private bool _draggingPlaybackHead;
@@ -1294,6 +1294,20 @@ namespace JianpuEditor.Controls
             {
                 _score.Measures = new System.Collections.Generic.List<JianpuMeasure> { new JianpuMeasure() };
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _inlineEditor?.Dispose();
+                _chordInlineEditor?.Dispose();
+                _scoreBitmap?.Dispose();
+                _inlineTextFont?.Dispose();
+                _renderer?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

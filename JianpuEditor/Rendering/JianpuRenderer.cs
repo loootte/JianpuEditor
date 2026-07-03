@@ -9,7 +9,7 @@ using JianpuEditor.Services;
 
 namespace JianpuEditor.Rendering
 {
-    public sealed class JianpuRenderer
+    public sealed class JianpuRenderer : IDisposable
     {
         public const int NoteCellWidth = 96;
         public const int MinMeasureWidth = 120;
@@ -30,6 +30,20 @@ namespace JianpuEditor.Rendering
         private readonly Font _rowLabelFont = new Font("Microsoft YaHei", 9f, FontStyle.Regular);
         private readonly Font _noteFont = new Font("Arial", 26f, FontStyle.Bold);
         private readonly Font _secondaryFont = new Font("Arial", 20f, FontStyle.Bold);
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _rowLabelFont.Dispose();
+            _noteFont.Dispose();
+            _secondaryFont.Dispose();
+            _disposed = true;
+        }
 
         public IReadOnlyList<PlaybackMeasureSegment> BuildPlaybackSegments(JianpuScore score, int width)
         {
@@ -745,7 +759,7 @@ namespace JianpuEditor.Rendering
             }
         }
 
-        private static List<List<int>> GroupNotesByQuarterBeat(IReadOnlyList<JianpuNote> notes)
+        private static List<List<int>> GroupNotesByQuarterBeat(List<JianpuNote> notes)
         {
             var groups = new List<List<int>>();
             var current = new List<int>();
@@ -1342,8 +1356,8 @@ namespace JianpuEditor.Rendering
 
         public sealed class MeasureLayout
         {
-            private int[] _noteWidths = new int[0];
-            private int[] _noteOffsets = new int[0];
+            private int[] _noteWidths = Array.Empty<int>();
+            private int[] _noteOffsets = Array.Empty<int>();
             private int _melodyContentWidth;
 
             public double MelodyScale { get; private set; } = 1.0;
