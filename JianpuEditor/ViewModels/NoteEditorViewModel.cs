@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JianpuEditor.Core.Messaging;
@@ -34,6 +35,8 @@ namespace JianpuEditor.ViewModels
             IncreaseDurationCommand = new RelayCommand(() => IncreaseDuration());
             TransposePitchUpCommand = new RelayCommand(() => TransposePitch(1));
             TransposePitchDownCommand = new RelayCommand(() => TransposePitch(-1));
+            SplitNoteCommand = new RelayCommand(() => SplitSelectedNotes());
+            MergeNotesCommand = new RelayCommand(() => MergeSelectedNotes());
         }
 
         public RelayCommand<int> AddNoteCommand { get; }
@@ -53,6 +56,10 @@ namespace JianpuEditor.ViewModels
         public RelayCommand TransposePitchUpCommand { get; }
 
         public RelayCommand TransposePitchDownCommand { get; }
+
+        public RelayCommand SplitNoteCommand { get; }
+
+        public RelayCommand MergeNotesCommand { get; }
 
         public JianpuNote PendingNote
         {
@@ -155,6 +162,128 @@ namespace JianpuEditor.ViewModels
             return StepDuration(1);
         }
 
+        public ScoreEditResult SplitSelectedNotes()
+        {
+            var refs = GetSelectedNoteRefs();
+            if (refs.Count == 0)
+            {
+                _messenger.Send(new StatusChangedMessage("请先选中要拆分的音符"));
+                return ScoreEditResult.Unchanged;
+            }
+
+            _document.EnsureMeasures();
+            var splitCount = 0;
+            int? selectMeasureIndex = null;
+            int? selectNoteIndex = null;
+
+            foreach (var group in refs.GroupBy(item => item.MeasureIndex))
+            {
+                foreach (var noteRef in group.OrderByDescending(item => item.NoteIndex))
+                {
+                    var measure = _document.Score.Measures[group.Key];
+                    if (noteRef.NoteIndex < 0 || noteRef.NoteIndex >= measure.MelodyNotes.Count)
+                    {
+                        continue;
+                    }
+
+                    var source = measure.MelodyNotes[noteRef.NoteIndex];
+                    if (!NoteSplitMergeService.TrySplitNote(source, out var parts))
+                    {
+                        continue;
+                    }
+
+                    NoteSplitMergeService.ReplaceNoteWithMany(
+                        _document.Score,
+                        group.Key,
+                        noteRef.NoteIndex,
+                        parts);
+                    splitCount++;
+                    selectMeasureIndex = group.Key;
+                    selectNoteIndex = noteRef.NoteIndex;
+                }
+            }
+
+            if (splitCount == 0)
+            {
+                return PublishEdit("无法拆分：音符已达最短时值或为休止符");
+            }
+
+            var result = PublishEdit(splitCount > 1
+                ? "已拆分 " + splitCount + " 个音符"
+                : "已拆分选中音符");
+            result.SelectNoteMeasureIndex = selectMeasureIndex;
+            result.SelectNoteIndex = selectNoteIndex;
+            return result;
+        }
+
+        public ScoreEditResult MergeSelectedNotes()
+        {
+            var refs = GetSelectedNoteRefs();
+            if (refs.Count < 2)
+            {
+                _messenger.Send(new StatusChangedMessage("请选中两个相邻音符进行合并"));
+                return ScoreEditResult.Unchanged;
+            }
+
+            _document.EnsureMeasures();
+            var runs = NoteSplitMergeService.GetAdjacentRuns(refs);
+            if (runs.Count == 0)
+            {
+                return PublishEdit("无法合并：请选择同一小节内的相邻音符");
+            }
+
+            var mergedCount = 0;
+            int? selectMeasureIndex = null;
+            int? selectNoteIndex = null;
+
+            foreach (var run in runs.OrderByDescending(item => item[0].MeasureIndex)
+                .ThenByDescending(item => item[0].NoteIndex))
+            {
+                var measureIndex = run[0].MeasureIndex;
+                var measure = _document.Score.Measures[measureIndex];
+                var startIndex = run[0].NoteIndex;
+                var allPureQuarter = run.All(item =>
+                {
+                    var note = measure.MelodyNotes[item.NoteIndex];
+                    return note.Type != NoteType.Rest
+                        && !note.Dotted
+                        && GetDurationTier(note) == 2;
+                });
+
+                var mergeCount = allPureQuarter
+                    ? Math.Min(run.Count, 4)
+                    : 2;
+                var mergeRefs = run.Take(mergeCount).ToList();
+                var noteObjects = mergeRefs
+                    .Select(item => measure.MelodyNotes[item.NoteIndex])
+                    .ToList();
+
+                if (!NoteSplitMergeService.TryMergeNotes(noteObjects, out var merged))
+                {
+                    continue;
+                }
+
+                measure.MelodyNotes[startIndex] = merged;
+                var removeIndices = Enumerable.Range(startIndex + 1, mergeCount - 1).ToArray();
+                NoteSplitMergeService.RemoveNotes(_document.Score, measureIndex, removeIndices);
+                mergedCount++;
+                selectMeasureIndex = measureIndex;
+                selectNoteIndex = startIndex;
+            }
+
+            if (mergedCount == 0)
+            {
+                return PublishEdit("无法合并：相邻音符时值相差超过 2 倍或类型不兼容");
+            }
+
+            var result = PublishEdit(mergedCount > 1
+                ? "已合并 " + mergedCount + " 组音符"
+                : "已合并选中音符");
+            result.SelectNoteMeasureIndex = selectMeasureIndex;
+            result.SelectNoteIndex = selectNoteIndex;
+            return result;
+        }
+
         public ScoreEditResult TransposePitch(int delta)
         {
             var selectedNotes = GetSelectedNotes();
@@ -249,6 +378,28 @@ namespace JianpuEditor.ViewModels
             var result = PublishEdit(message);
             result.SelectNoteMeasureIndex = measureIndex;
             result.SelectNoteIndex = insertIndex;
+            return result;
+        }
+
+        private List<ScoreNoteRef> GetSelectedNoteRefs()
+        {
+            var result = new List<ScoreNoteRef>();
+            if (!_selection.HasNoteSelected)
+            {
+                return result;
+            }
+
+            if (_selection.SelectedNotes != null && _selection.SelectedNotes.Count > 0)
+            {
+                result.AddRange(_selection.SelectedNotes);
+                return result;
+            }
+
+            if (_selection.NoteIndex >= 0 && _selection.MeasureIndex >= 0)
+            {
+                result.Add(new ScoreNoteRef(_selection.MeasureIndex, _selection.NoteIndex));
+            }
+
             return result;
         }
 

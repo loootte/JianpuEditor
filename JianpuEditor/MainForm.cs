@@ -264,6 +264,8 @@ namespace JianpuEditor
             panel.Controls.Add(CreateToolButton("低音·", () => _viewModel.NoteEditor.SetOctaveDownCommand.Execute(null)));
             panel.Controls.Add(CreateToolButton("升key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(1))));
             panel.Controls.Add(CreateToolButton("降key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(-1))));
+            panel.Controls.Add(CreateToolButton("拆分", () => ExecuteEdit(() => _viewModel.NoteEditor.SplitSelectedNotes())));
+            panel.Controls.Add(CreateToolButton("合并", () => ExecuteEdit(() => _viewModel.NoteEditor.MergeSelectedNotes())));
             panel.Controls.Add(CreateToolButton("附点", () => ExecuteEdit(() => _viewModel.NoteEditor.ToggleDotted())));
             panel.Controls.Add(CreateToolButton("增时+", () => ExecuteEdit(() => _viewModel.NoteEditor.IncreaseDuration())));
             panel.Controls.Add(CreateToolButton("减时-", () => ExecuteEdit(() => _viewModel.NoteEditor.DecreaseDuration())));
