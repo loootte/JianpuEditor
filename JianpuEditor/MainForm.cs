@@ -298,12 +298,6 @@ namespace JianpuEditor
                 AutoScroll = false
             };
 
-            panel.Controls.Add(CreateToolButton("打开", () => _viewModel.OpenScoreCommand.Execute(null)));
-            panel.Controls.Add(CreateToolButton("保存", () => _viewModel.SaveScoreCommand.Execute(null)));
-            panel.Controls.Add(CreateToolButton("导出PDF", () => _viewModel.ExportPdfCommand.Execute(null)));
-            panel.Controls.Add(CreateToolButton("导出MIDI", () => _viewModel.ExportMidiCommand.Execute(null)));
-            panel.Controls.Add(CreateSeparator());
-
             _playButton = CreateToolButton("播放", OnPlayScore);
             _stopButton = CreateToolButton("停止", OnStopPlayback);
             _stopButton.Enabled = false;
@@ -360,8 +354,6 @@ namespace JianpuEditor
             _chordBox.Width = 120;
             _chordBox.TextChanged += OnChordTextChanged;
             panel.Controls.Add(_chordBox);
-            panel.Controls.Add(CreateToolButton("添加和弦", () => ExecuteEdit(() => _viewModel.ChordEditor.AddChordMarker())));
-            panel.Controls.Add(CreateToolButton("转调", ShowTransposeDialog));
 
             panel.Controls.Add(new Label { Text = "歌词:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
             _lyricBox.Width = 160;
@@ -370,7 +362,6 @@ namespace JianpuEditor
 
             panel.Controls.Add(CreateSeparator());
             panel.Controls.Add(CreateToolButton("删除", ExecuteDelete));
-            panel.Controls.Add(CreateToolButton("清空", () => OnClearScore(null, EventArgs.Empty)));
             _sampleLibraryMenu = new ContextMenuStrip();
             _sampleLibraryMenu.Opening += (s, e) => PopulateSampleLibraryMenu(_sampleLibraryMenu.Items);
             var sampleButton = CreateToolButton("曲库", () => { });
