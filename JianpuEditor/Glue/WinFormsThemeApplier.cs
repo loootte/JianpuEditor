@@ -30,6 +30,7 @@ namespace JianpuEditor.Glue
 
             menuStrip.Visible = true;
             menuStrip.GripStyle = ToolStripGripStyle.Hidden;
+            menuStrip.ForeColor = AppTheme.IsDarkMode ? AppTheme.FormForeground : SystemColors.ControlText;
             if (AppTheme.IsDarkMode)
             {
                 menuStrip.RenderMode = ToolStripRenderMode.Professional;
@@ -39,6 +40,7 @@ namespace JianpuEditor.Glue
             {
                 menuStrip.RenderMode = ToolStripRenderMode.System;
                 menuStrip.Renderer = null;
+                menuStrip.BackColor = SystemColors.MenuBar;
             }
         }
 
@@ -87,6 +89,12 @@ namespace JianpuEditor.Glue
                 button.BackColor = AppTheme.IsDarkMode ? Color.FromArgb(58, 58, 64) : SystemColors.Control;
                 button.ForeColor = AppTheme.FormForeground;
                 button.FlatStyle = FlatStyle.Standard;
+                return;
+            }
+
+            if (control is TableLayoutPanel || control is FlowLayoutPanel)
+            {
+                control.BackColor = AppTheme.FormBackground;
                 return;
             }
 

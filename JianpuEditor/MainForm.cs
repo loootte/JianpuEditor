@@ -31,6 +31,10 @@ namespace JianpuEditor
         private Button _tieButton;
         private Button _playButton;
         private Button _stopButton;
+        private const int HeaderPanelHeight = 88;
+        private const int ToolbarPanelHeight = 120;
+
+        private TableLayoutPanel _topChrome;
         private MenuStrip _menuStrip;
         private ContextMenuStrip _sampleLibraryMenu;
         private ToolStripMenuItem _darkModeMenuItem;
@@ -48,10 +52,8 @@ namespace JianpuEditor
             KeyPreview = true;
             KeyDown += OnFormKeyDown;
 
-            BuildMenu();
-            BuildToolbar();
-            BuildHeader();
             BuildFooter();
+            BuildTopChrome();
             BuildCanvas();
 
             _binder = new MainFormViewBinder(
@@ -98,11 +100,37 @@ namespace JianpuEditor
             WinFormsThemeApplier.Apply(this, _canvas);
         }
 
-        private void BuildMenu()
+        private void BuildTopChrome()
         {
-            _menuStrip = new MenuStrip();
-            var menu = _menuStrip;
+            var headerPanel = CreateHeaderPanel();
+            var toolbarPanel = CreateToolbarPanel();
 
+            _topChrome = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                ColumnCount = 1,
+                RowCount = 2,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(0),
+                Margin = new Padding(0)
+            };
+            _topChrome.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            _topChrome.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderPanelHeight));
+            _topChrome.RowStyles.Add(new RowStyle(SizeType.Absolute, ToolbarPanelHeight));
+            _topChrome.Controls.Add(headerPanel, 0, 0);
+            _topChrome.Controls.Add(toolbarPanel, 0, 1);
+
+            _menuStrip = new MenuStrip();
+            PopulateMenuStrip(_menuStrip);
+
+            Controls.Add(_topChrome);
+            Controls.Add(_menuStrip);
+            MainMenuStrip = _menuStrip;
+        }
+
+        private void PopulateMenuStrip(MenuStrip menu)
+        {
             var fileMenu = new ToolStripMenuItem("文件");
             fileMenu.DropDownItems.Add(CreateMenuItem("新建", Keys.Control | Keys.N, (s, e) => OnNewScore(s, e)));
             fileMenu.DropDownItems.Add(CreateMenuItem("打开...", Keys.Control | Keys.O, OnOpenScore));
@@ -138,15 +166,14 @@ namespace JianpuEditor
             menu.Items.Add(fileMenu);
             menu.Items.Add(editMenu);
             menu.Items.Add(viewMenu);
-            MainMenuStrip = menu;
         }
 
-        private void BuildHeader()
+        private TableLayoutPanel CreateHeaderPanel()
         {
             var panel = new TableLayoutPanel
             {
-                Dock = DockStyle.Top,
-                Height = 88,
+                Dock = DockStyle.Fill,
+                Height = HeaderPanelHeight,
                 Padding = new Padding(12, 8, 12, 8),
                 ColumnCount = 10
             };
@@ -182,15 +209,15 @@ namespace JianpuEditor
             panel.Controls.Add(new Label { Text = "作曲", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 8, 0);
             panel.Controls.Add(_composerBox, 9, 0);
 
-            Controls.Add(panel);
+            return panel;
         }
 
-        private void BuildToolbar()
+        private FlowLayoutPanel CreateToolbarPanel()
         {
             var panel = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top,
-                Height = 120,
+                Dock = DockStyle.Fill,
+                Height = ToolbarPanelHeight,
                 Padding = new Padding(12, 8, 12, 8),
                 WrapContents = true,
                 AutoScroll = true
@@ -275,7 +302,7 @@ namespace JianpuEditor
             sampleButton.Click += (s, e) => _sampleLibraryMenu.Show(sampleButton, new Point(0, sampleButton.Height));
             panel.Controls.Add(sampleButton);
 
-            Controls.Add(panel);
+            return panel;
         }
 
         private void BuildCanvas()
