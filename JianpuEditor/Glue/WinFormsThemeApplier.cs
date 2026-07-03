@@ -104,9 +104,68 @@ namespace JianpuEditor.Glue
                 return;
             }
 
+            if (control is TableLayoutPanel || control is FlowLayoutPanel)
+            {
+                control.BackColor = AppTheme.FormBackground;
+                return;
+            }
+
             if (control is Panel panel && panel.Width <= 4)
             {
                 panel.BackColor = AppTheme.Separator;
+            }
+        }
+
+        private sealed class DarkToolStripColorTable : ProfessionalColorTable
+        {
+            public override Color MenuStripGradientBegin
+            {
+                get { return AppTheme.FormBackground; }
+            }
+
+            public override Color MenuStripGradientEnd
+            {
+                get { return AppTheme.FormBackground; }
+            }
+
+            public override Color MenuItemSelected
+            {
+                get { return Color.FromArgb(70, 70, 78); }
+            }
+
+            public override Color MenuItemSelectedGradientBegin
+            {
+                get { return Color.FromArgb(70, 70, 78); }
+            }
+
+            public override Color MenuItemSelectedGradientEnd
+            {
+                get { return Color.FromArgb(70, 70, 78); }
+            }
+
+            public override Color MenuItemBorder
+            {
+                get { return Color.FromArgb(90, 90, 98); }
+            }
+
+            public override Color ToolStripDropDownBackground
+            {
+                get { return AppTheme.InputBackground; }
+            }
+
+            public override Color ImageMarginGradientBegin
+            {
+                get { return AppTheme.InputBackground; }
+            }
+
+            public override Color ImageMarginGradientMiddle
+            {
+                get { return AppTheme.InputBackground; }
+            }
+
+            public override Color ImageMarginGradientEnd
+            {
+                get { return AppTheme.InputBackground; }
             }
         }
     }

@@ -527,6 +527,17 @@ namespace JianpuEditor.Controls
             InvalidateSelection();
         }
 
+        public void ResetViewport()
+        {
+            if (!IsHandleCreated)
+            {
+                return;
+            }
+
+            AutoScrollPosition = new Point(0, 0);
+            RefreshScore();
+        }
+
         public void SetPlaybackPosition(double quarterBeat, bool showHead = true, bool ensureVisible = false)
         {
             var oldBounds = GetPlaybackHeadBounds(_playbackPositionQuarter, _showPlaybackHead);

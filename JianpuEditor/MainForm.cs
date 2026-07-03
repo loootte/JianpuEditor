@@ -200,8 +200,47 @@ namespace JianpuEditor
 
         private MenuStrip BuildMenuStrip()
         {
-            var menu = new MenuStrip();
+            AdjustTopChromeHeight();
+        }
 
+        private void AdjustTopChromeHeight()
+        {
+            if (_topChrome == null)
+            {
+                return;
+            }
+
+            var toolbar = _topChrome.GetControlFromPosition(0, 1) as FlowLayoutPanel;
+            var width = Math.Max(ClientSize.Width, 400);
+            var toolbarHeight = MeasureToolbarHeight(toolbar, width);
+            _topChrome.RowStyles[1] = new RowStyle(SizeType.Absolute, toolbarHeight);
+
+            var chromeHeight = HeaderPanelHeight + toolbarHeight + _topChrome.Padding.Vertical;
+            if (_topChrome.Height != chromeHeight)
+            {
+                _topChrome.Height = chromeHeight;
+            }
+
+            _topChrome.MinimumSize = new Size(0, chromeHeight);
+            PerformLayout();
+        }
+
+        private static int MeasureToolbarHeight(FlowLayoutPanel toolbar, int width)
+        {
+            if (toolbar == null)
+            {
+                return DefaultToolbarHeight;
+            }
+
+            toolbar.MaximumSize = new Size(width, 0);
+            toolbar.Width = width;
+            toolbar.PerformLayout();
+            var height = toolbar.GetPreferredSize(new Size(width, 0)).Height;
+            return Math.Max(height + 4, 80);
+        }
+
+        private void PopulateMenuStrip(MenuStrip menu)
+        {
             var fileMenu = new ToolStripMenuItem("文件");
             fileMenu.DropDownItems.Add(CreateMenuItem("新建", Keys.Control | Keys.N, (s, e) => OnNewScore(s, e)));
             fileMenu.DropDownItems.Add(CreateMenuItem("打开...", Keys.Control | Keys.O, OnOpenScore));
