@@ -51,7 +51,7 @@
 
 ```powershell
 dotnet build JianpuEditor.sln -c Debug
-dotnet test JianpuEditor.sln -c Debug
+dotnet test JianpuEditor.sln -c Debug   # 需要 .NET 8 SDK
 .\JianpuEditor\bin\Debug\net472\JianpuEditor.exe
 ```
 
