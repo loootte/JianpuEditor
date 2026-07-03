@@ -46,5 +46,15 @@ namespace JianpuEditor.Tests.Services
             Assert.Equal("歌词", clone.Measures[0].LyricText);
             Assert.Equal(1, clone.Measures[0].MelodyNotes[0].Pitch);
         }
+
+        [Fact]
+        public void AreEquivalent_DetectsEqualClonesAndDifferentScores()
+        {
+            var original = new JianpuScore { Title = "A" };
+            var clone = ScoreCloneService.Clone(original);
+
+            Assert.True(ScoreCloneService.AreEquivalent(original, clone));
+            Assert.False(ScoreCloneService.AreEquivalent(original, new JianpuScore { Title = "B" }));
+        }
     }
 }

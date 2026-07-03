@@ -16,6 +16,8 @@ namespace JianpuEditor.Tests.ViewModels
 
             navigation.AddMeasure();
             Assert.Equal(2, navigation.MeasureCount);
+            Assert.True(history.CanUndo);
+            Assert.Equal(1, history.UndoCount);
 
             history.Undo();
 

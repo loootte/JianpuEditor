@@ -23,6 +23,7 @@ namespace JianpuEditor
         private readonly IEditCommandHistory _commandHistory;
         private JianpuScore _mutationBeforeSnapshot;
         private int _mutationBeforeMeasureIndex = -1;
+        private bool _suppressCanvasMutationTracking;
         private ScoreCanvasGlue _glue;
         private MainFormViewBinder _binder;
         private MainFormLayoutContext _layoutContext;
@@ -404,26 +405,55 @@ namespace JianpuEditor
 
         private void ExecuteNoteEdit(Func<ScoreEditResult> action)
         {
-            var result = action();
-            if (!result.Changed)
-            {
-                return;
-            }
-
-            _glue.ApplyEditResult(result);
-            _binder.SyncFromViewModels();
+            ExecuteTrackedEdit(action, refreshUndoMenu: false);
         }
 
         private void ExecuteScoreEdit(Func<ScoreEditResult> action)
         {
-            var result = action();
-            if (!result.Changed)
+            ExecuteTrackedEdit(action, refreshUndoMenu: true);
+        }
+
+        private void ExecuteTrackedEdit(Func<ScoreEditResult> action, bool refreshUndoMenu)
+        {
+            _suppressCanvasMutationTracking = true;
+            try
             {
-                return;
+                var result = action();
+                if (!result.Changed)
+                {
+                    return;
+                }
+
+                _glue.ApplyEditResult(result);
+                _binder.SyncFromViewModels();
+                if (refreshUndoMenu)
+                {
+                    UpdateUndoMenuState();
+                }
+            }
+            finally
+            {
+                _suppressCanvasMutationTracking = false;
+                _mutationBeforeSnapshot = null;
+                _mutationBeforeMeasureIndex = -1;
+            }
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.Z))
+            {
+                ExecuteUndo();
+                return true;
             }
 
-            _glue.ApplyEditResult(result);
-            _binder.SyncFromViewModels();
+            if (keyData == (Keys.Control | Keys.Y))
+            {
+                ExecuteRedo();
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private void ExecuteAddMeasure()
@@ -487,18 +517,6 @@ namespace JianpuEditor
 
         private void OnFormKeyDown(object sender, KeyEventArgs e)
         {
-            if (IsTextInputFocused())
-            {
-                return;
-            }
-
-            if (e.KeyCode == Keys.Escape && _viewModel.TieEditor.IsTieModeActive)
-            {
-                _viewModel.TieEditor.CancelTieModeCommand.Execute(null);
-                e.Handled = true;
-                return;
-            }
-
             if (e.Control && e.KeyCode == Keys.Z)
             {
                 ExecuteUndo();
@@ -509,6 +527,18 @@ namespace JianpuEditor
             if (e.Control && e.KeyCode == Keys.Y)
             {
                 ExecuteRedo();
+                e.Handled = true;
+                return;
+            }
+
+            if (IsTextInputFocused())
+            {
+                return;
+            }
+
+            if (e.KeyCode == Keys.Escape && _viewModel.TieEditor.IsTieModeActive)
+            {
+                _viewModel.TieEditor.CancelTieModeCommand.Execute(null);
                 e.Handled = true;
                 return;
             }
@@ -590,20 +620,32 @@ namespace JianpuEditor
 
         private void OnCanvasScoreMutationStarting(object sender, EventArgs e)
         {
+            if (_suppressCanvasMutationTracking)
+            {
+                return;
+            }
+
             _mutationBeforeSnapshot = ScoreCloneService.Clone(_viewModel.Document.Score);
             _mutationBeforeMeasureIndex = _viewModel.MeasureNavigation.CurrentMeasureIndex;
         }
 
         private void OnCanvasChordMarkersChanged(object sender, EventArgs e)
         {
-            CommitCanvasMutationCommand("已更新和弦标识");
+            if (!_suppressCanvasMutationTracking)
+            {
+                CommitCanvasMutationCommand("已更新和弦标识");
+            }
+
             _viewModel.ChordEditor.SyncFromSelection();
             _binder.SyncMeasureTextBoxes();
         }
 
         private void OnCanvasMeasureTextEdited(object sender, EventArgs e)
         {
-            CommitCanvasMutationCommand("已更新小节文字");
+            if (!_suppressCanvasMutationTracking)
+            {
+                CommitCanvasMutationCommand("已更新小节文字");
+            }
             if (_canvas.SelectedMeasureIndex >= 0)
             {
                 var result = _viewModel.MeasureContent.NotifyInlineLyricEdited(_canvas.SelectedMeasureIndex);
@@ -616,6 +658,14 @@ namespace JianpuEditor
         {
             if (_mutationBeforeSnapshot == null)
             {
+                _viewModel.NotifyScoreEdited(description, markDirty: true);
+                return;
+            }
+
+            if (ScoreCloneService.AreEquivalent(_mutationBeforeSnapshot, _viewModel.Document.Score))
+            {
+                _mutationBeforeSnapshot = null;
+                _mutationBeforeMeasureIndex = -1;
                 _viewModel.NotifyScoreEdited(description, markDirty: true);
                 return;
             }

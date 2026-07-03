@@ -130,16 +130,19 @@ namespace JianpuEditor.ViewModels
         private ScoreEditResult ApplyAddMeasure()
         {
             _document.EnsureMeasures();
-            _document.Score.Measures.Add(new JianpuMeasure());
-            var newIndex = _document.Score.Measures.Count - 1;
+            var score = ScoreCloneService.Clone(_document.Score);
+            score.Measures.Add(new JianpuMeasure());
+            var newIndex = score.Measures.Count - 1;
+            _document.Score = score;
             CurrentMeasureIndex = newIndex;
 
-            var message = "已新增第 " + _document.Score.Measures.Count + " 小节";
+            var message = "已新增第 " + score.Measures.Count + " 小节";
             return new ScoreEditResult
             {
                 Changed = true,
                 Message = message,
-                SelectMeasureIndex = newIndex
+                SelectMeasureIndex = newIndex,
+                RequiresScoreRefresh = true
             };
         }
 
