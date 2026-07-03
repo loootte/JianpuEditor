@@ -63,6 +63,7 @@ namespace JianpuEditor.Controls
         private ScoreHeaderField _editingHeaderField = ScoreHeaderField.None;
         private int _editingChordMeasureIndex = -1;
         private int _editingChordMarkerIndex = -1;
+        private bool _chordInlineUndoRecorded;
         private int _selectedMeasureIndex = -1;
         private int _selectedNoteIndex = -1;
         private readonly List<ScoreNoteRef> _selectedNotes = new List<ScoreNoteRef>();
@@ -124,6 +125,8 @@ namespace JianpuEditor.Controls
         public event EventHandler<ScoreHeaderEditedEventArgs> HeaderEdited;
 
         public event EventHandler ChordMarkersChanged;
+
+        public event EventHandler ScoreMutationStarting;
 
         public event Action<double> PlaybackSeeked;
 
@@ -336,6 +339,13 @@ namespace JianpuEditor.Controls
             }
 
             var measure = _score.Measures[measureIndex];
+            ChordMarkerService.NormalizeMeasure(measure);
+            if (measure.ChordMarkers.Count >= JianpuMeasure.MaxChordMarkers)
+            {
+                return false;
+            }
+
+            NotifyScoreMutationStarting();
             if (!ChordMarkerService.TryAddMarker(measure, beatPosition))
             {
                 return false;
@@ -356,6 +366,7 @@ namespace JianpuEditor.Controls
             }
 
             var measure = _score.Measures[_selectedChordMeasureIndex];
+            NotifyScoreMutationStarting();
             if (!ChordMarkerService.TryRemoveMarker(measure, _selectedChordMarkerIndex))
             {
                 return false;
@@ -619,6 +630,7 @@ namespace JianpuEditor.Controls
             var hit = _renderer.HitTest(_score, GetDrawWidth(), e.Location);
             if (hit.HitType == ScoreHitType.ChordDragHandle)
             {
+                NotifyScoreMutationStarting();
                 _draggingChordMarker = true;
                 _dragChordMeasureIndex = hit.MeasureIndex;
                 _dragChordMarkerIndex = hit.ChordMarkerIndex;
@@ -1204,6 +1216,7 @@ namespace JianpuEditor.Controls
 
             var text = _inlineEditor.Text ?? string.Empty;
             var measure = _score.Measures[_editingMeasureIndex];
+            NotifyScoreMutationStarting();
             measure.LyricText = text;
 
             RemoveInlineEditor();
@@ -1404,6 +1417,7 @@ namespace JianpuEditor.Controls
             var bounds = ChordMarkerLayout.GetMarkerBounds(layout, measure, measureIndex, markerIndex, marker).TextBoxBounds;
             _editingChordMeasureIndex = measureIndex;
             _editingChordMarkerIndex = markerIndex;
+            _chordInlineUndoRecorded = false;
             _chordInlineEditor = new TextBox
             {
                 Bounds = bounds,
@@ -1461,6 +1475,12 @@ namespace JianpuEditor.Controls
                 return;
             }
 
+            if (!_chordInlineUndoRecorded)
+            {
+                NotifyScoreMutationStarting();
+                _chordInlineUndoRecorded = true;
+            }
+
             measure.ChordMarkers[_editingChordMarkerIndex].Text = _chordInlineEditor.Text ?? string.Empty;
             MarkScoreBitmapDirty();
             _contentPanel.Invalidate();
@@ -1481,6 +1501,11 @@ namespace JianpuEditor.Controls
                 var measure = _score.Measures[_editingChordMeasureIndex];
                 if (_editingChordMarkerIndex < measure.ChordMarkers.Count)
                 {
+                    if (!_chordInlineUndoRecorded)
+                    {
+                        NotifyScoreMutationStarting();
+                    }
+
                     measure.ChordMarkers[_editingChordMarkerIndex].Text = _chordInlineEditor.Text ?? string.Empty;
                 }
             }
@@ -1595,6 +1620,11 @@ namespace JianpuEditor.Controls
             AutoScrollPosition = new Point(
                 -Math.Max(0, Math.Min(maxX, targetX)),
                 -Math.Max(0, Math.Min(maxY, targetY)));
+        }
+
+        private void NotifyScoreMutationStarting()
+        {
+            ScoreMutationStarting?.Invoke(this, EventArgs.Empty);
         }
 
         private void EnsureMeasures()

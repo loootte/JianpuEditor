@@ -16,6 +16,7 @@ namespace JianpuEditor
 
             services.AddSingleton<IAppMessenger, AppMessenger>();
             services.AddSingleton<IScoreFileService, ScoreFileServiceAdapter>();
+            services.AddSingleton<IScoreUndoService, ScoreUndoService>();
             services.AddSingleton<IScorePlaybackService, ScorePlaybackService>();
             services.AddSingleton<IPdfExportService, PdfExportServiceAdapter>();
             services.AddSingleton<IMidiExportService, MidiExportServiceAdapter>();

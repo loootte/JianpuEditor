@@ -3,6 +3,7 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using JianpuEditor.Controls;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Glue;
 using JianpuEditor.Rendering;
@@ -18,6 +19,7 @@ namespace JianpuEditor
         private readonly MainViewModel _viewModel;
         private readonly IAppMessenger _messenger;
         private readonly ILayoutService _layoutService;
+        private readonly IScoreUndoService _undoService;
         private ScoreCanvasGlue _glue;
         private MainFormViewBinder _binder;
         private MainFormLayoutContext _layoutContext;
@@ -35,12 +37,19 @@ namespace JianpuEditor
         private MenuStrip _menuStrip;
         private ContextMenuStrip _sampleLibraryMenu;
         private ToolStripMenuItem _darkModeMenuItem;
+        private ToolStripMenuItem _undoMenuItem;
 
-        public MainForm(MainViewModel viewModel, IAppMessenger messenger, ILayoutService layoutService)
+        public MainForm(
+            MainViewModel viewModel,
+            IAppMessenger messenger,
+            ILayoutService layoutService,
+            IScoreUndoService undoService)
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             _layoutService = layoutService ?? throw new ArgumentNullException(nameof(layoutService));
+            _undoService = undoService ?? throw new ArgumentNullException(nameof(undoService));
+            _undoService.StackChanged += (s, e) => UpdateUndoMenuState();
 
             InitializeComponent();
             SetupLayoutStructure();
@@ -76,6 +85,7 @@ namespace JianpuEditor
             _canvas.MeasureTextEdited += OnCanvasMeasureTextEdited;
             _canvas.HeaderEdited += OnCanvasHeaderEdited;
             _canvas.ChordMarkersChanged += OnCanvasChordMarkersChanged;
+            _canvas.ScoreMutationStarting += OnCanvasScoreMutationStarting;
             _canvas.PlaybackSeeked += OnCanvasPlaybackSeeked;
 
             mainViewModel.RequestOpenScore += (s, e) => OnOpenScore(s, e);
@@ -209,7 +219,9 @@ namespace JianpuEditor
             fileMenu.DropDownItems.Add(CreateMenuItem("退出", Keys.None, (s, e) => Close()));
 
             var editMenu = new ToolStripMenuItem("编辑");
-            editMenu.DropDownItems.Add(CreateMenuItem("撤销最后一个音符", Keys.Control | Keys.Z, (s, e) => ExecuteDelete()));
+            _undoMenuItem = CreateMenuItem("撤回", Keys.Control | Keys.Z, (s, e) => ExecuteUndo());
+            _undoMenuItem.Enabled = false;
+            editMenu.DropDownItems.Add(_undoMenuItem);
             editMenu.DropDownItems.Add(CreateMenuItem("新增小节", Keys.None, (s, e) => ExecuteAddMeasure()));
             editMenu.DropDownItems.Add(CreateMenuItem("复制小节", Keys.None, (s, e) => ExecuteDuplicateMeasures()));
             editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
@@ -260,8 +272,8 @@ namespace JianpuEditor
             panel.Controls.Add(CreateSeparator());
 
             panel.Controls.Add(new Label { Text = "修饰:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
-            panel.Controls.Add(CreateToolButton("高音·", () => _viewModel.NoteEditor.SetOctaveUpCommand.Execute(null)));
-            panel.Controls.Add(CreateToolButton("低音·", () => _viewModel.NoteEditor.SetOctaveDownCommand.Execute(null)));
+            panel.Controls.Add(CreateToolButton("高音·", () => ExecuteEdit(() => _viewModel.NoteEditor.SetOctave(1))));
+            panel.Controls.Add(CreateToolButton("低音·", () => ExecuteEdit(() => _viewModel.NoteEditor.SetOctave(-1))));
             panel.Controls.Add(CreateToolButton("升key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(1))));
             panel.Controls.Add(CreateToolButton("降key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(-1))));
             panel.Controls.Add(CreateToolButton("拆分", () => ExecuteEdit(() => _viewModel.NoteEditor.SplitSelectedNotes())));
@@ -366,32 +378,134 @@ namespace JianpuEditor
             return (shortcut & Keys.Modifiers) != Keys.None;
         }
 
+        private void RecordUndoSnapshot()
+        {
+            if (_undoService.IsRestoring)
+            {
+                return;
+            }
+
+            _undoService.RecordSnapshot(_viewModel.Document.Score);
+            UpdateUndoMenuState();
+        }
+
+        private void UpdateUndoMenuState()
+        {
+            if (_undoMenuItem != null)
+            {
+                _undoMenuItem.Enabled = _undoService.CanUndo;
+            }
+        }
+
         private void ExecuteEdit(Func<ScoreEditResult> action)
         {
+            RecordUndoSnapshot();
             var result = action();
+            if (!result.Changed)
+            {
+                _undoService.DiscardLastSnapshot();
+                UpdateUndoMenuState();
+            }
+
             _glue.ApplyEditResult(result);
             _binder.SyncFromViewModels();
         }
 
         private void ExecuteAddMeasure()
         {
+            RecordUndoSnapshot();
             var result = _viewModel.MeasureNavigation.AddMeasure();
+            if (!result.Changed)
+            {
+                _undoService.DiscardLastSnapshot();
+                UpdateUndoMenuState();
+            }
+
             _glue.ApplyEditResult(result);
             _binder.SyncFromViewModels();
         }
 
         private void ExecuteDuplicateMeasures()
         {
+            RecordUndoSnapshot();
             var result = _viewModel.MeasureNavigation.DuplicateMeasures();
+            if (!result.Changed)
+            {
+                _undoService.DiscardLastSnapshot();
+                UpdateUndoMenuState();
+            }
+
             _glue.ApplyEditResult(result);
             _binder.SyncFromViewModels();
         }
 
         private void ExecuteDelete()
         {
+            RecordUndoSnapshot();
             var result = _viewModel.ScoreEditor.Delete();
+            if (!result.Changed)
+            {
+                _undoService.DiscardLastSnapshot();
+                UpdateUndoMenuState();
+            }
+
             _glue.ApplyEditResult(result);
             _binder.SyncFromViewModels();
+        }
+
+        private void ExecuteUndo()
+        {
+            if (!_undoService.CanUndo)
+            {
+                return;
+            }
+
+            var snapshot = _undoService.PopSnapshot();
+            if (snapshot == null)
+            {
+                UpdateUndoMenuState();
+                return;
+            }
+
+            _undoService.EnterRestore();
+            try
+            {
+                _viewModel.Playback.Stop();
+                _viewModel.TieEditor.CancelTieMode();
+
+                var measureIndex = _viewModel.MeasureNavigation.CurrentMeasureIndex;
+                if (snapshot.Measures != null && snapshot.Measures.Count > 0)
+                {
+                    measureIndex = Math.Max(0, Math.Min(measureIndex, snapshot.Measures.Count - 1));
+                }
+                else
+                {
+                    measureIndex = 0;
+                }
+
+                _viewModel.Document.Score = snapshot;
+                _viewModel.MeasureNavigation.SyncCurrentMeasureIndex(measureIndex);
+                _viewModel.MeasureContent.LoadFromMeasure(measureIndex);
+                _viewModel.ChordEditor.SyncFromSelection();
+
+                _glue.ApplyEditResult(new ScoreEditResult
+                {
+                    Changed = true,
+                    SelectMeasureIndex = measureIndex,
+                    ClearMelodySelection = true,
+                    ClearTieSelection = true,
+                    ClearChordSelection = true
+                });
+                _glue.ResetPlaybackHead();
+                _binder.SyncHeaderFromDocument();
+                _binder.SyncFromViewModels();
+                _viewModel.SetStatus("已撤回");
+            }
+            finally
+            {
+                _undoService.LeaveRestore();
+                UpdateUndoMenuState();
+            }
         }
 
         private void OnFormKeyDown(object sender, KeyEventArgs e)
@@ -404,6 +518,13 @@ namespace JianpuEditor
             if (e.KeyCode == Keys.Escape && _viewModel.TieEditor.IsTieModeActive)
             {
                 _viewModel.TieEditor.CancelTieModeCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.Z)
+            {
+                ExecuteUndo();
                 e.Handled = true;
                 return;
             }
@@ -467,6 +588,7 @@ namespace JianpuEditor
                 return;
             }
 
+            RecordUndoSnapshot();
             var text = e.Text ?? string.Empty;
             switch (e.Field)
             {
@@ -506,6 +628,11 @@ namespace JianpuEditor
             _binder.SyncFromViewModels();
         }
 
+        private void OnCanvasScoreMutationStarting(object sender, EventArgs e)
+        {
+            RecordUndoSnapshot();
+        }
+
         private void OnCanvasChordMarkersChanged(object sender, EventArgs e)
         {
             _viewModel.NotifyScoreEdited("已更新和弦标识", markDirty: true);
@@ -532,7 +659,14 @@ namespace JianpuEditor
 
             _viewModel.Playback.Stop();
             _viewModel.TieEditor.CancelTieMode();
+            RecordUndoSnapshot();
             var result = _viewModel.ScoreEditor.ClearScore();
+            if (!result.Changed)
+            {
+                _undoService.DiscardLastSnapshot();
+                UpdateUndoMenuState();
+            }
+
             _glue.ApplyEditResult(result);
             _glue.ResetPlaybackHead();
             _binder.SyncFromViewModels();
@@ -823,10 +957,17 @@ namespace JianpuEditor
                     return;
                 }
 
+                RecordUndoSnapshot();
                 var result = _viewModel.ChordEditor.TransposeChords(targetKey);
-                if (!result.Changed && !string.IsNullOrEmpty(result.Message))
+                if (!result.Changed)
                 {
-                    MessageBox.Show(result.Message, "转调失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _undoService.DiscardLastSnapshot();
+                    UpdateUndoMenuState();
+                    if (!string.IsNullOrEmpty(result.Message))
+                    {
+                        MessageBox.Show(result.Message, "转调失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+
                     return;
                 }
 

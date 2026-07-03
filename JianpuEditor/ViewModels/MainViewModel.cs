@@ -12,6 +12,7 @@ namespace JianpuEditor.ViewModels
     {
         private readonly IPdfExportService _pdfExportService;
         private readonly IMidiExportService _midiExportService;
+        private readonly IScoreUndoService _undoService;
         private readonly IAppMessenger _messenger;
         private string _statusMessage = "就绪";
 
@@ -28,6 +29,7 @@ namespace JianpuEditor.ViewModels
             SampleLibraryViewModel sampleLibrary,
             IPdfExportService pdfExportService,
             IMidiExportService midiExportService,
+            IScoreUndoService undoService,
             IAppMessenger messenger)
         {
             Document = document ?? throw new ArgumentNullException(nameof(document));
@@ -42,6 +44,7 @@ namespace JianpuEditor.ViewModels
             SampleLibrary = sampleLibrary ?? throw new ArgumentNullException(nameof(sampleLibrary));
             _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
             _midiExportService = midiExportService ?? throw new ArgumentNullException(nameof(midiExportService));
+            _undoService = undoService ?? throw new ArgumentNullException(nameof(undoService));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
 
             NewScoreCommand = new RelayCommand(NewScore);
@@ -136,7 +139,13 @@ namespace JianpuEditor.ViewModels
 
             if (info.HasNoteSelected && TieEditor.IsTieModeActive)
             {
-                TieEditor.TryCompleteTie(info.MeasureIndex, info.NoteIndex);
+                _undoService.RecordSnapshot(Document.Score);
+                var tieResult = TieEditor.TryCompleteTie(info.MeasureIndex, info.NoteIndex);
+                if (!tieResult.Changed)
+                {
+                    _undoService.DiscardLastSnapshot();
+                }
+
                 return;
             }
 
