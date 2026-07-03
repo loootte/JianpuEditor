@@ -20,6 +20,20 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+          cache: true
+          cache-dependency-path: |
+            JianpuEditor.sln
+            **/*.csproj
+
+      - name: Cache .NET build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            JianpuEditor/obj
+            JianpuEditor.Tests/obj
+          key: ${{ runner.os }}-dotnet-build-${{ hashFiles('JianpuEditor.sln', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-dotnet-build-
 
       - name: Restore
         run: dotnet restore JianpuEditor.sln
