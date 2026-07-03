@@ -6,9 +6,9 @@ using JianpuEditor.Controls;
 using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Glue;
+using JianpuEditor.Models;
 using JianpuEditor.Rendering;
 using JianpuEditor.Services;
-using JianpuEditor.Models;
 using JianpuEditor.ViewModels;
 using JianpuEditor.Views;
 
