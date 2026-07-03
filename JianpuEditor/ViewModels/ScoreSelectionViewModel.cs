@@ -16,6 +16,7 @@ namespace JianpuEditor.ViewModels
         private int _chordMeasureIndex = -1;
         private int _chordMarkerIndex = -1;
         private IReadOnlyList<int> _selectedMeasureIndices = Array.Empty<int>();
+        private IReadOnlyList<ScoreNoteRef> _selectedNotes = Array.Empty<ScoreNoteRef>();
 
         public ScoreSelectionViewModel(ScoreDocumentViewModel document)
         {
@@ -64,9 +65,20 @@ namespace JianpuEditor.ViewModels
             private set { SetProperty(ref _selectedMeasureIndices, value); }
         }
 
+        public IReadOnlyList<ScoreNoteRef> SelectedNotes
+        {
+            get { return _selectedNotes; }
+            private set { SetProperty(ref _selectedNotes, value); }
+        }
+
         public bool HasNoteSelected
         {
-            get { return NoteIndex >= 0; }
+            get { return SelectedNotes != null && SelectedNotes.Count > 0 || NoteIndex >= 0; }
+        }
+
+        public bool HasMultipleNotesSelected
+        {
+            get { return SelectedNotes != null && SelectedNotes.Count > 1; }
         }
 
         public bool HasGapSelected
@@ -98,6 +110,7 @@ namespace JianpuEditor.ViewModels
             ChordMeasureIndex = info.ChordMeasureIndex;
             ChordMarkerIndex = info.ChordMarkerIndex;
             SelectedMeasureIndices = info.SelectedMeasureIndices ?? Array.Empty<int>();
+            SelectedNotes = info.SelectedNotes ?? Array.Empty<ScoreNoteRef>();
         }
 
         public string BuildSelectionDescription()
@@ -125,6 +138,19 @@ namespace JianpuEditor.ViewModels
                            (ChordMarkerIndex + 1) + " 个，拍位 " + (marker.BeatPosition + 1) +
                            "，可拖动 :: 改位置，Delete/「删除」移除";
                 }
+            }
+
+            if (HasMultipleNotesSelected)
+            {
+                var minMeasure = SelectedNotes.Min(note => note.MeasureIndex);
+                var maxMeasure = SelectedNotes.Max(note => note.MeasureIndex);
+                if (minMeasure != maxMeasure)
+                {
+                    return "已选中 " + SelectedNotes.Count + " 个音符（第 " + (minMeasure + 1) +
+                           " 到第 " + (maxMeasure + 1) + " 小节），可用上方按钮批量修改";
+                }
+
+                return "已选中 " + SelectedNotes.Count + " 个音符，可用上方按钮批量修改";
             }
 
             if (SelectedMeasureIndices != null && SelectedMeasureIndices.Count > 1)

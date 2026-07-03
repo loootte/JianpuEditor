@@ -31,12 +31,14 @@ namespace JianpuEditor.Tests.ViewModels
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
             IAppMessenger messenger,
-            IChordTransposeService transposeService = null)
+            IChordTransposeService transposeService = null,
+            IScoreUndoService undoService = null)
         {
             return new ChordEditorViewModel(
                 document,
                 selection,
                 transposeService ?? new ChordTransposeServiceAdapter(),
+                undoService ?? new ScoreUndoService(messenger),
                 messenger);
         }
 
@@ -66,6 +68,7 @@ namespace JianpuEditor.Tests.ViewModels
                 sampleLibrary,
                 new FakePdfExportService(),
                 new FakeMidiExportService(),
+                new ScoreUndoService(messenger),
                 messenger);
         }
 
@@ -97,6 +100,7 @@ namespace JianpuEditor.Tests.ViewModels
                 sampleLibrary,
                 pdfExport,
                 midiExport,
+                new ScoreUndoService(messenger),
                 messenger);
         }
     }

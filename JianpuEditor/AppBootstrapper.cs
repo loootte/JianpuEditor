@@ -3,6 +3,7 @@ using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Services;
 using JianpuEditor.ViewModels;
+using JianpuEditor.Views;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace JianpuEditor
@@ -15,6 +16,7 @@ namespace JianpuEditor
 
             services.AddSingleton<IAppMessenger, AppMessenger>();
             services.AddSingleton<IScoreFileService, ScoreFileServiceAdapter>();
+            services.AddSingleton<IScoreUndoService, ScoreUndoService>();
             services.AddSingleton<IScorePlaybackService, ScorePlaybackService>();
             services.AddSingleton<IPdfExportService, PdfExportServiceAdapter>();
             services.AddSingleton<IMidiExportService, MidiExportServiceAdapter>();
@@ -31,6 +33,7 @@ namespace JianpuEditor
             services.AddSingleton<PlaybackViewModel>();
             services.AddSingleton<SampleLibraryViewModel>();
             services.AddSingleton<MainViewModel>();
+            services.AddSingleton<ILayoutService, WinFormsLayoutService>();
             services.AddTransient<MainForm>();
 
             return services.BuildServiceProvider();

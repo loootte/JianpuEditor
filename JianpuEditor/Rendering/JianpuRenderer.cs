@@ -127,6 +127,7 @@ namespace JianpuEditor.Rendering
             int selectedTieIndex = -1,
             int selectedChordMeasureIndex = -1,
             int selectedChordMarkerIndex = -1,
+            IReadOnlyList<ScoreNoteRef> selectedNotes = null,
             ScoreLayoutOptions layoutOptions = null)
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -148,6 +149,7 @@ namespace JianpuEditor.Rendering
                 selectedTieIndex,
                 selectedChordMeasureIndex,
                 selectedChordMarkerIndex,
+                selectedNotes,
                 layoutOptions);
             _activeLayoutOptions = null;
         }
@@ -189,6 +191,12 @@ namespace JianpuEditor.Rendering
 
         public ScoreHitResult HitTest(JianpuScore score, int width, Point point)
         {
+            var headerHit = HitTestHeader(score, width, point);
+            if (headerHit != null)
+            {
+                return headerHit;
+            }
+
             var layout = BuildLayout(score, width, null);
 
             var barHit = HitTestBarLineGap(score, layout, point);
@@ -390,7 +398,7 @@ namespace JianpuEditor.Rendering
             var bitmap = new Bitmap(size.Width, size.Height);
             using (var g = Graphics.FromImage(bitmap))
             {
-                Draw(g, score, width, -1, -1, -1, null, -1, -1, -1, options);
+                Draw(g, score, width, -1, -1, -1, null, -1, -1, -1, null, options);
             }
 
             return bitmap;
@@ -455,6 +463,147 @@ namespace JianpuEditor.Rendering
             }
         }
 
+        private ScoreHitResult HitTestHeader(JianpuScore score, int width, Point point, ScoreLayoutOptions options = null)
+        {
+            options = options ?? ScoreLayoutOptions.Default;
+            var marginTop = GetMarginTop(options);
+            if (point.Y < 0 || point.Y >= marginTop)
+            {
+                return null;
+            }
+
+            using (var bitmap = new Bitmap(1, 1))
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                var headerLayout = BuildHeaderLayout(graphics, score, width, options);
+                if (headerLayout.TitleBounds.Contains(point))
+                {
+                    return CreateHeaderHit(ScoreHeaderField.Title, headerLayout.TitleBounds);
+                }
+
+                if (headerLayout.KeyBounds.Contains(point))
+                {
+                    return CreateHeaderHit(ScoreHeaderField.KeySignature, headerLayout.KeyBounds);
+                }
+
+                if (headerLayout.TempoBounds.Contains(point))
+                {
+                    return CreateHeaderHit(ScoreHeaderField.Tempo, headerLayout.TempoBounds);
+                }
+
+                if (headerLayout.BpmBounds.Contains(point))
+                {
+                    return CreateHeaderHit(ScoreHeaderField.Bpm, headerLayout.BpmBounds);
+                }
+
+                if (headerLayout.ComposerBounds.Contains(point))
+                {
+                    return CreateHeaderHit(ScoreHeaderField.Composer, headerLayout.ComposerBounds);
+                }
+            }
+
+            return null;
+        }
+
+        private static ScoreHitResult CreateHeaderHit(ScoreHeaderField field, Rectangle bounds)
+        {
+            return new ScoreHitResult
+            {
+                HitType = ScoreHitType.ScoreHeader,
+                HeaderField = field,
+                Bounds = bounds.ToIntRect()
+            };
+        }
+
+        private sealed class ScoreHeaderLayout
+        {
+            public Rectangle TitleBounds { get; set; }
+
+            public Rectangle KeyBounds { get; set; }
+
+            public Rectangle TempoBounds { get; set; }
+
+            public Rectangle BpmBounds { get; set; }
+
+            public Rectangle ComposerBounds { get; set; }
+        }
+
+        private ScoreHeaderLayout BuildHeaderLayout(Graphics g, JianpuScore score, int width, ScoreLayoutOptions options)
+        {
+            var layout = new ScoreHeaderLayout();
+            using (var titleFont = new Font("Microsoft YaHei", options.TitleFontSize, FontStyle.Bold))
+            using (var metaFont = new Font("Microsoft YaHei", options.MetaFontSize, FontStyle.Regular))
+            {
+                const float titleTop = 20f;
+                const float metaGap = 10f;
+                var metaTop = titleTop + titleFont.Size + metaGap;
+                var rowHeight = Math.Max(titleFont.Height, metaFont.Height) + 8f;
+                var titleText = string.IsNullOrWhiteSpace(score.Title) ? "点击输入标题" : score.Title;
+                var titleWidth = g.MeasureString(titleText, titleFont).Width;
+                layout.TitleBounds = Rectangle.Round(new RectangleF(
+                    Math.Max(8f, (width - titleWidth) / 2f - 12f),
+                    titleTop - 4f,
+                    Math.Min(width - 16f, titleWidth + 24f),
+                    rowHeight));
+
+                var keyText = score.KeySignature ?? "1=C";
+                var tempoText = score.Tempo ?? string.Empty;
+                var bpmValue = score.Bpm > 0 ? score.Bpm : 120;
+                var bpmText = bpmValue.ToString();
+                var composerText = score.Composer ?? string.Empty;
+                var gapText = "    ";
+                var gapWidth = g.MeasureString(gapText, metaFont).Width;
+
+                var keyWidth = g.MeasureString(keyText, metaFont).Width;
+                var tempoWidth = Math.Max(g.MeasureString(tempoText, metaFont).Width, 36f);
+                var bpmSegment = "BPM " + bpmText;
+                var bpmWidth = g.MeasureString(bpmSegment, metaFont).Width;
+                var composerSegment = "作曲: " + composerText;
+                var composerWidth = Math.Max(g.MeasureString(composerSegment, metaFont).Width, 56f);
+
+                var metaTotalWidth = keyWidth + gapWidth + tempoWidth + gapWidth + bpmWidth + gapWidth + composerWidth;
+
+                var metaX = options.HeaderMetaLeftAligned
+                    ? (float)MarginLeft
+                    : Math.Max(8f, (width - metaTotalWidth) / 2f);
+                var metaY = metaTop - 4f;
+                var metaRowHeight = metaFont.Height + 8f;
+
+                layout.KeyBounds = Rectangle.Round(new RectangleF(metaX, metaY, keyWidth + 12f, metaRowHeight));
+                metaX += keyWidth + gapWidth;
+                layout.TempoBounds = Rectangle.Round(new RectangleF(metaX - 6f, metaY, tempoWidth + 12f, metaRowHeight));
+                metaX += tempoWidth + gapWidth;
+                layout.BpmBounds = Rectangle.Round(new RectangleF(metaX - 6f, metaY, bpmWidth + 12f, metaRowHeight));
+                metaX += bpmWidth + gapWidth;
+                layout.ComposerBounds = Rectangle.Round(new RectangleF(
+                    metaX - 6f,
+                    metaY,
+                    composerWidth + 12f,
+                    metaRowHeight));
+            }
+
+            return layout;
+        }
+
+        public string GetHeaderFieldText(JianpuScore score, ScoreHeaderField field)
+        {
+            switch (field)
+            {
+                case ScoreHeaderField.Title:
+                    return score.Title ?? string.Empty;
+                case ScoreHeaderField.KeySignature:
+                    return score.KeySignature ?? string.Empty;
+                case ScoreHeaderField.Tempo:
+                    return score.Tempo ?? string.Empty;
+                case ScoreHeaderField.Bpm:
+                    return (score.Bpm > 0 ? score.Bpm : 120).ToString();
+                case ScoreHeaderField.Composer:
+                    return score.Composer ?? string.Empty;
+                default:
+                    return string.Empty;
+            }
+        }
+
         private void DrawRowLabels(Graphics g, ScoreLayout layout)
         {
             if (layout.Lines.Count == 0)
@@ -484,6 +633,7 @@ namespace JianpuEditor.Rendering
             int selectedTieIndex,
             int selectedChordMeasureIndex,
             int selectedChordMarkerIndex,
+            IReadOnlyList<ScoreNoteRef> selectedNotes,
             ScoreLayoutOptions layoutOptions)
         {
             layoutOptions = layoutOptions ?? ScoreLayoutOptions.Default;
@@ -491,7 +641,8 @@ namespace JianpuEditor.Rendering
             {
                 var measureData = score.Measures[measure.MeasureIndex];
                 var isInSelection = IsMeasureSelected(measure.MeasureIndex, selectedMeasureIndices, selectedMeasureIndex);
-                var isSelectedMeasure = isInSelection && selectedInsertIndex < 0 && selectedNoteIndex < 0;
+                var hasSelectedNotes = selectedNotes != null && selectedNotes.Count > 0;
+                var isSelectedMeasure = isInSelection && selectedInsertIndex < 0 && !hasSelectedNotes && selectedNoteIndex < 0;
 
                 if (isInSelection)
                 {
@@ -510,7 +661,7 @@ namespace JianpuEditor.Rendering
                     }
                 }
 
-                DrawMelodyRow(g, measureData, measure, selectedMeasureIndex, selectedNoteIndex, selectedInsertIndex);
+                DrawMelodyRow(g, measureData, measure, selectedMeasureIndex, selectedNoteIndex, selectedInsertIndex, selectedNotes);
                 DrawChordMarkersRow(
                     g,
                     measureData,
@@ -737,7 +888,14 @@ namespace JianpuEditor.Rendering
             public float ArchTop;
         }
 
-        private void DrawMelodyRow(Graphics g, JianpuMeasure measure, MeasureLayout layout, int selectedMeasureIndex, int selectedNoteIndex, int selectedInsertIndex)
+        private void DrawMelodyRow(
+            Graphics g,
+            JianpuMeasure measure,
+            MeasureLayout layout,
+            int selectedMeasureIndex,
+            int selectedNoteIndex,
+            int selectedInsertIndex,
+            IReadOnlyList<ScoreNoteRef> selectedNotes)
         {
             if (layout.MeasureIndex == selectedMeasureIndex && selectedInsertIndex >= 0)
             {
@@ -751,7 +909,9 @@ namespace JianpuEditor.Rendering
             var noteCount = measure.MelodyNotes.Count;
             for (var i = 0; i < noteCount; i++)
             {
-                var isSelected = layout.MeasureIndex == selectedMeasureIndex && i == selectedNoteIndex;
+                var isSelected = selectedNotes != null && selectedNotes.Count > 0
+                    ? selectedNotes.Any(note => note.MeasureIndex == layout.MeasureIndex && note.NoteIndex == i)
+                    : layout.MeasureIndex == selectedMeasureIndex && i == selectedNoteIndex;
                 GetNoteDrawBounds(layout, i, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
 
                 DrawNote(

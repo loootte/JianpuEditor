@@ -14,6 +14,7 @@ namespace JianpuEditor.ViewModels
         private readonly ScoreDocumentViewModel _document;
         private readonly ScoreSelectionViewModel _selection;
         private readonly IChordTransposeService _chordTransposeService;
+        private readonly IScoreUndoService _undoService;
         private readonly IAppMessenger _messenger;
         private string _selectedChordText = string.Empty;
         private bool _isChordEditorEnabled;
@@ -23,11 +24,13 @@ namespace JianpuEditor.ViewModels
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
             IChordTransposeService chordTransposeService,
+            IScoreUndoService undoService,
             IAppMessenger messenger)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
             _selection = selection ?? throw new ArgumentNullException(nameof(selection));
             _chordTransposeService = chordTransposeService ?? throw new ArgumentNullException(nameof(chordTransposeService));
+            _undoService = undoService ?? throw new ArgumentNullException(nameof(undoService));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             AddChordMarkerCommand = new RelayCommand(() => AddChordMarker());
             TransposeChordsCommand = new RelayCommand<string>(
@@ -159,7 +162,15 @@ namespace JianpuEditor.ViewModels
                 return;
             }
 
-            measure.ChordMarkers[markerIndex].Text = text ?? string.Empty;
+            var newText = text ?? string.Empty;
+            var currentText = measure.ChordMarkers[markerIndex].Text ?? string.Empty;
+            if (string.Equals(currentText, newText, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _undoService.RecordSnapshot(_document.Score);
+            measure.ChordMarkers[markerIndex].Text = newText;
             _messenger.Send(new ScoreEditedMessage("已更新和弦标识", stopPlayback: false));
         }
 

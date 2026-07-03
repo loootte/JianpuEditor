@@ -19,9 +19,16 @@ namespace JianpuEditor.Models
 
         public IReadOnlyList<int> SelectedMeasureIndices { get; set; } = Array.Empty<int>();
 
+        public IReadOnlyList<ScoreNoteRef> SelectedNotes { get; set; } = Array.Empty<ScoreNoteRef>();
+
         public bool HasNoteSelected
         {
-            get { return NoteIndex >= 0; }
+            get { return SelectedNotes != null && SelectedNotes.Count > 0 || NoteIndex >= 0; }
+        }
+
+        public bool HasMultipleNotesSelected
+        {
+            get { return SelectedNotes != null && SelectedNotes.Count > 1; }
         }
 
         public bool HasGapSelected

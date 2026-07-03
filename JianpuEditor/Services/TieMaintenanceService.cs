@@ -5,6 +5,27 @@ namespace JianpuEditor.Services
 {
     public static class TieMaintenanceService
     {
+        public static void OnMelodyNoteCountChanged(JianpuScore score, int measureIndex, int startNoteIndex, int countDelta)
+        {
+            if (score?.Ties == null || score.Ties.Count == 0 || countDelta == 0)
+            {
+                return;
+            }
+
+            foreach (var tie in score.Ties)
+            {
+                if (tie.StartMeasureIndex == measureIndex && tie.StartNoteIndex >= startNoteIndex)
+                {
+                    tie.StartNoteIndex += countDelta;
+                }
+
+                if (tie.EndMeasureIndex == measureIndex && tie.EndNoteIndex >= startNoteIndex)
+                {
+                    tie.EndNoteIndex += countDelta;
+                }
+            }
+        }
+
         public static void OnNoteRemoved(JianpuScore score, int measureIndex, int removedNoteIndex)
         {
             if (score?.Ties == null || score.Ties.Count == 0)

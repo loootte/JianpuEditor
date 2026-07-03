@@ -33,8 +33,7 @@ namespace JianpuEditor.Glue
             menuStrip.ForeColor = AppTheme.IsDarkMode ? AppTheme.FormForeground : SystemColors.ControlText;
             if (AppTheme.IsDarkMode)
             {
-                menuStrip.RenderMode = ToolStripRenderMode.Professional;
-                menuStrip.Renderer = new ToolStripProfessionalRenderer(new DarkToolStripColorTable());
+                menuStrip.BackColor = AppTheme.FormBackground;
             }
             else
             {
@@ -67,6 +66,19 @@ namespace JianpuEditor.Glue
             if (control is MenuStrip menuStrip)
             {
                 ApplyMenuStrip(menuStrip);
+                return;
+            }
+
+            if (control is ToolStrip toolStrip)
+            {
+                toolStrip.BackColor = AppTheme.FormBackground;
+                toolStrip.ForeColor = AppTheme.FormForeground;
+                return;
+            }
+
+            if (control is TableLayoutPanel || control is FlowLayoutPanel)
+            {
+                control.BackColor = AppTheme.FormBackground;
                 return;
             }
 
