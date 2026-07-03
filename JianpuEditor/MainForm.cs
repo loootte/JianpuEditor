@@ -32,6 +32,7 @@ namespace JianpuEditor
         private Button _playButton;
         private Button _stopButton;
         private const int HeaderPanelHeight = 88;
+        private const int DefaultToolbarHeight = 160;
 
         private TableLayoutPanel _topChrome;
         private MenuStrip _menuStrip;
@@ -57,6 +58,7 @@ namespace JianpuEditor
             BuildTopChrome();
             BuildCanvas();
             ResumeLayout(true);
+            Load += OnFormLoad;
             Shown += OnFormShown;
             Resize += OnFormResize;
 
@@ -102,6 +104,7 @@ namespace JianpuEditor
             _binder.SyncFromViewModels();
             _viewModel.SetStatus("就绪 - 点击音符修改，副旋律行可添加/拖动和弦标识，点击歌词行编辑文字");
             WinFormsThemeApplier.Apply(this, _canvas);
+            EnsureMenuStripVisible();
         }
 
         private void BuildMenuStrip()
@@ -121,34 +124,85 @@ namespace JianpuEditor
                 Dock = DockStyle.Top,
                 ColumnCount = 1,
                 RowCount = 2,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                AutoSize = false,
                 Padding = new Padding(0),
                 Margin = new Padding(0)
             };
             _topChrome.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             _topChrome.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderPanelHeight));
-            _topChrome.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _topChrome.RowStyles.Add(new RowStyle(SizeType.Absolute, DefaultToolbarHeight));
             _topChrome.Controls.Add(headerPanel, 0, 0);
             _topChrome.Controls.Add(toolbarPanel, 0, 1);
             Controls.Add(_topChrome);
         }
 
+        private void OnFormLoad(object sender, EventArgs e)
+        {
+            AdjustTopChromeHeight();
+        }
+
         private void OnFormShown(object sender, EventArgs e)
         {
-            ResetCanvasViewport();
+            EnsureMenuStripVisible();
+            AdjustTopChromeHeight();
+            _canvas.ResetViewport();
+        }
+
+        private void EnsureMenuStripVisible()
+        {
+            if (_menuStrip == null)
+            {
+                return;
+            }
+
+            _menuStrip.Visible = true;
+            if (MainMenuStrip != _menuStrip)
+            {
+                MainMenuStrip = _menuStrip;
+            }
+
+            WinFormsThemeApplier.ApplyMenuStrip(_menuStrip);
         }
 
         private void OnFormResize(object sender, EventArgs e)
         {
-            _topChrome?.PerformLayout();
-            ResetCanvasViewport();
+            AdjustTopChromeHeight();
         }
 
-        private void ResetCanvasViewport()
+        private void AdjustTopChromeHeight()
         {
-            _canvas.AutoScrollPosition = new Point(0, 0);
-            _canvas.RefreshScore();
+            if (_topChrome == null)
+            {
+                return;
+            }
+
+            var toolbar = _topChrome.GetControlFromPosition(0, 1) as FlowLayoutPanel;
+            var width = Math.Max(ClientSize.Width, 400);
+            var toolbarHeight = MeasureToolbarHeight(toolbar, width);
+            _topChrome.RowStyles[1] = new RowStyle(SizeType.Absolute, toolbarHeight);
+
+            var chromeHeight = HeaderPanelHeight + toolbarHeight + _topChrome.Padding.Vertical;
+            if (_topChrome.Height != chromeHeight)
+            {
+                _topChrome.Height = chromeHeight;
+            }
+
+            _topChrome.MinimumSize = new Size(0, chromeHeight);
+            PerformLayout();
+        }
+
+        private static int MeasureToolbarHeight(FlowLayoutPanel toolbar, int width)
+        {
+            if (toolbar == null)
+            {
+                return DefaultToolbarHeight;
+            }
+
+            toolbar.MaximumSize = new Size(width, 0);
+            toolbar.Width = width;
+            toolbar.PerformLayout();
+            var height = toolbar.GetPreferredSize(new Size(width, 0)).Height;
+            return Math.Max(height + 4, 80);
         }
 
         private void PopulateMenuStrip(MenuStrip menu)
@@ -239,8 +293,6 @@ namespace JianpuEditor
             var panel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Padding = new Padding(12, 8, 12, 8),
                 WrapContents = true,
                 AutoScroll = false
