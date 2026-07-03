@@ -56,6 +56,87 @@ namespace JianpuEditor.Tests.ViewModels
             Assert.Equal(NoteType.Rest, document.Score.Measures[0].MelodyNotes[0].Type);
         }
 
+        [Fact]
+        public void AppendNote_WithSelectedNote_AppendsToMeasureEnd()
+        {
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history, navigation);
+            document.EnsureMeasures();
+            document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 1 });
+            document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 2 });
+            selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
+
+            var result = editor.AppendNote(5);
+
+            Assert.Equal(3, document.Score.Measures[0].MelodyNotes.Count);
+            Assert.Equal(1, document.Score.Measures[0].MelodyNotes[0].Pitch);
+            Assert.Equal(5, document.Score.Measures[0].MelodyNotes[2].Pitch);
+            Assert.Equal(2, result.SelectNoteIndex);
+        }
+
+        [Fact]
+        public void AppendNote_UsesCurrentMeasureIndex()
+        {
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history, navigation);
+            document.EnsureMeasures();
+            document.Score.Measures.Add(new JianpuMeasure());
+            document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 1 });
+            document.Score.Measures[1].MelodyNotes.Add(new JianpuNote { Pitch = 2 });
+            navigation.SelectMeasure(1);
+            selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
+
+            var result = editor.AppendNote(6);
+
+            Assert.Equal(2, document.Score.Measures[1].MelodyNotes.Count);
+            Assert.Equal(6, document.Score.Measures[1].MelodyNotes[1].Pitch);
+            Assert.Equal(1, result.SelectNoteMeasureIndex);
+            Assert.Equal(1, result.SelectNoteIndex);
+        }
+
+        [Fact]
+        public void AppendNote_WithCopyStyle_CopiesPreviousDurationAndOctave()
+        {
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history, navigation);
+            document.EnsureMeasures();
+            document.Score.Measures[0].MelodyNotes.Add(new JianpuNote
+            {
+                Pitch = 3,
+                Octave = 1,
+                Underlines = 1,
+                Dashes = 0,
+                Dotted = true
+            });
+
+            editor.AppendNote(5, copyPreviousNoteStyle: true);
+
+            var appended = document.Score.Measures[0].MelodyNotes[1];
+            Assert.Equal(5, appended.Pitch);
+            Assert.Equal(1, appended.Octave);
+            Assert.Equal(1, appended.Underlines);
+            Assert.True(appended.Dotted);
+        }
+
+        [Fact]
+        public void AppendRest_AppendsToMeasureEnd()
+        {
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history, navigation);
+            document.EnsureMeasures();
+            document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 4 });
+            selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
+
+            editor.AppendRest();
+
+            Assert.Equal(2, document.Score.Measures[0].MelodyNotes.Count);
+            Assert.Equal(NoteType.Rest, document.Score.Measures[0].MelodyNotes[1].Type);
+        }
+
         [Theory]
         [InlineData(0, 2, 0)]
         [InlineData(1, 1, 0)]
