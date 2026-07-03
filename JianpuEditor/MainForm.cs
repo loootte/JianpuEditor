@@ -44,6 +44,7 @@ namespace JianpuEditor
         private ToolStripMenuItem _undoMenuItem;
         private ToolStripMenuItem _redoMenuItem;
         private UndoRedoMessageFilter _undoRedoMessageFilter;
+        private bool _isExecutingHistoryChange;
 
         public MainForm(
             MainViewModel viewModel,
@@ -479,46 +480,68 @@ namespace JianpuEditor
 
         private bool TryExecuteUndo(string source)
         {
+            if (_isExecutingHistoryChange)
+            {
+                return true;
+            }
+
             LogUndoRedoAttempt("Undo", source);
             if (!_commandHistory.CanUndo)
             {
                 return true;
             }
 
-            ExecuteUndo();
+            ExecuteHistoryChange(() =>
+            {
+                _commandHistory.Undo();
+                _viewModel.SetStatus("已撤回");
+            });
             return true;
         }
 
         private bool TryExecuteRedo(string source)
         {
+            if (_isExecutingHistoryChange)
+            {
+                return true;
+            }
+
             LogUndoRedoAttempt("Redo", source);
             if (!_commandHistory.CanRedo)
             {
                 return true;
             }
 
-            ExecuteRedo();
+            ExecuteHistoryChange(() =>
+            {
+                _commandHistory.Redo();
+                _viewModel.SetStatus("已重做");
+            });
             return true;
         }
 
-        private void ExecuteUndo()
+        private void ExecuteHistoryChange(Action changeAction)
         {
-            _commandHistory.Undo();
-            _viewModel.SetStatus("已撤回");
-            _glue.SyncAfterHistoryChange(CreateHistoryRefreshResult());
-            _binder.SyncHeaderFromDocument();
-            _binder.SyncFromViewModels();
-            UpdateUndoMenuState();
-        }
-
-        private void ExecuteRedo()
-        {
-            _commandHistory.Redo();
-            _viewModel.SetStatus("已重做");
-            _glue.SyncAfterHistoryChange(CreateHistoryRefreshResult());
-            _binder.SyncHeaderFromDocument();
-            _binder.SyncFromViewModels();
-            UpdateUndoMenuState();
+            _isExecutingHistoryChange = true;
+            try
+            {
+                changeAction();
+                _glue.SyncAfterHistoryChange(CreateHistoryRefreshResult());
+                _binder.SyncHeaderFromDocument();
+                _binder.SyncFromViewModels();
+                UpdateUndoMenuState();
+            }
+            catch (Exception ex)
+            {
+                var line = "[CommandHistory] HistoryChangeFailed | " + ex.GetType().Name + " | " + ex.Message;
+                Console.WriteLine(line);
+                AppLog.Exception("撤销/重做失败", ex);
+                _viewModel.SetStatus("撤销/重做失败: " + ex.Message);
+            }
+            finally
+            {
+                _isExecutingHistoryChange = false;
+            }
         }
 
         private void LogUndoRedoAttempt(string action, string source)

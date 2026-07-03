@@ -77,8 +77,9 @@ namespace JianpuEditor.Services.EditCommands
 
         private void RestoreSnapshot(JianpuScore snapshot, int measureIndex, string message)
         {
-            _document.Score = ScoreCloneService.Clone(snapshot);
-            _navigation.SyncCurrentMeasureIndex(measureIndex);
+            var restoredScore = ScoreCloneService.Clone(snapshot);
+            _navigation.SyncCurrentMeasureIndex(measureIndex, restoredScore.Measures.Count);
+            _document.Score = restoredScore;
             _messenger.Send(new ScoreEditedMessage(message));
             Result = new ScoreEditResult
             {

@@ -124,6 +124,15 @@ namespace JianpuEditor.ViewModels
 
         public void SyncCurrentMeasureIndex(int index)
         {
+            _document.EnsureMeasures();
+            index = Math.Max(0, Math.Min(index, _document.Score.Measures.Count - 1));
+            CurrentMeasureIndex = index;
+        }
+
+        public void SyncCurrentMeasureIndex(int index, int measureCount)
+        {
+            measureCount = Math.Max(1, measureCount);
+            index = Math.Max(0, Math.Min(index, measureCount - 1));
             CurrentMeasureIndex = index;
         }
 

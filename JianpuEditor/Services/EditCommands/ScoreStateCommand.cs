@@ -93,8 +93,9 @@ namespace JianpuEditor.Services.EditCommands
 
         private void RestoreState(JianpuScore state, int measureIndex, string message)
         {
-            _document.Score = ScoreCloneService.Clone(state);
-            _navigation.SyncCurrentMeasureIndex(measureIndex);
+            var restoredScore = ScoreCloneService.Clone(state);
+            _navigation.SyncCurrentMeasureIndex(measureIndex, restoredScore.Measures.Count);
+            _document.Score = restoredScore;
             _messenger.Send(new ScoreEditedMessage(message));
             Result = new ScoreEditResult
             {
