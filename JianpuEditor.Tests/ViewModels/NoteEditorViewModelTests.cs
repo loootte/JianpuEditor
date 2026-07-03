@@ -110,6 +110,22 @@ namespace JianpuEditor.Tests.ViewModels
         }
 
         [Fact]
+        public void TransposePitch_RaisesSelectedNoteWithinKey()
+        {
+            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var editor = new NoteEditorViewModel(document, selection, messenger);
+            document.EnsureMeasures();
+            var note = new JianpuNote { Pitch = 5, Octave = 0 };
+            document.Score.Measures[0].MelodyNotes.Add(note);
+            selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
+
+            editor.TransposePitch(1);
+
+            Assert.Equal(6, note.Pitch);
+            Assert.Equal(0, note.Octave);
+        }
+
+        [Fact]
         public void DecreaseDuration_StepsThroughTiersDownToSixteenth()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();

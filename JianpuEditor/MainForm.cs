@@ -262,6 +262,8 @@ namespace JianpuEditor
             panel.Controls.Add(new Label { Text = "修饰:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
             panel.Controls.Add(CreateToolButton("高音·", () => _viewModel.NoteEditor.SetOctaveUpCommand.Execute(null)));
             panel.Controls.Add(CreateToolButton("低音·", () => _viewModel.NoteEditor.SetOctaveDownCommand.Execute(null)));
+            panel.Controls.Add(CreateToolButton("升key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(1))));
+            panel.Controls.Add(CreateToolButton("降key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(-1))));
             panel.Controls.Add(CreateToolButton("附点", () => ExecuteEdit(() => _viewModel.NoteEditor.ToggleDotted())));
             panel.Controls.Add(CreateToolButton("增时+", () => ExecuteEdit(() => _viewModel.NoteEditor.IncreaseDuration())));
             panel.Controls.Add(CreateToolButton("减时-", () => ExecuteEdit(() => _viewModel.NoteEditor.DecreaseDuration())));

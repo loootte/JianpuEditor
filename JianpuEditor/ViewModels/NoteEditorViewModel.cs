@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
+using JianpuEditor.Services;
 
 namespace JianpuEditor.ViewModels
 {
@@ -31,6 +32,8 @@ namespace JianpuEditor.ViewModels
             ToggleDottedCommand = new RelayCommand(() => ToggleDotted());
             DecreaseDurationCommand = new RelayCommand(() => DecreaseDuration());
             IncreaseDurationCommand = new RelayCommand(() => IncreaseDuration());
+            TransposePitchUpCommand = new RelayCommand(() => TransposePitch(1));
+            TransposePitchDownCommand = new RelayCommand(() => TransposePitch(-1));
         }
 
         public RelayCommand<int> AddNoteCommand { get; }
@@ -46,6 +49,10 @@ namespace JianpuEditor.ViewModels
         public RelayCommand DecreaseDurationCommand { get; }
 
         public RelayCommand IncreaseDurationCommand { get; }
+
+        public RelayCommand TransposePitchUpCommand { get; }
+
+        public RelayCommand TransposePitchDownCommand { get; }
 
         public JianpuNote PendingNote
         {
@@ -146,6 +153,43 @@ namespace JianpuEditor.ViewModels
         public ScoreEditResult IncreaseDuration()
         {
             return StepDuration(1);
+        }
+
+        public ScoreEditResult TransposePitch(int delta)
+        {
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
+            {
+                var changedCount = 0;
+                foreach (var selected in selectedNotes)
+                {
+                    if (JianpuPitchService.TryTranspose(selected, delta))
+                    {
+                        changedCount++;
+                    }
+                }
+
+                if (changedCount == 0)
+                {
+                    return PublishEdit(delta > 0 ? "已达最高音" : "已达最低音");
+                }
+
+                var direction = delta > 0 ? "升" : "降";
+                return PublishEdit(changedCount > 1
+                    ? "已" + direction + "key " + changedCount + " 个选中音符"
+                    : "已" + direction + "key选中音符");
+            }
+
+            if (!JianpuPitchService.TryTranspose(_pendingNote, delta))
+            {
+                _messenger.Send(new StatusChangedMessage(delta > 0 ? "下一音符已达最高音" : "下一音符已达最低音"));
+                return ScoreEditResult.Unchanged;
+            }
+
+            _messenger.Send(new StatusChangedMessage(
+                "下一音符音高: " + _pendingNote.Pitch +
+                (_pendingNote.Octave > 0 ? "·" : _pendingNote.Octave < 0 ? ".." : string.Empty)));
+            return ScoreEditResult.Unchanged;
         }
 
         private ScoreEditResult StepDuration(int delta)
