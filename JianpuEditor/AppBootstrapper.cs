@@ -1,0 +1,39 @@
+using System;
+using JianpuEditor.Core.Abstractions;
+using JianpuEditor.Core.Messaging;
+using JianpuEditor.Services;
+using JianpuEditor.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace JianpuEditor
+{
+    internal static class AppBootstrapper
+    {
+        public static IServiceProvider ConfigureServices()
+        {
+            var services = new ServiceCollection();
+
+            services.AddSingleton<IAppMessenger, AppMessenger>();
+            services.AddSingleton<IScoreFileService, ScoreFileServiceAdapter>();
+            services.AddSingleton<IScorePlaybackService, ScorePlaybackService>();
+            services.AddSingleton<IPdfExportService, PdfExportServiceAdapter>();
+            services.AddSingleton<IMidiExportService, MidiExportServiceAdapter>();
+            services.AddSingleton<ISampleLibraryService, SampleLibraryServiceAdapter>();
+            services.AddSingleton<IChordTransposeService, ChordTransposeServiceAdapter>();
+            services.AddSingleton<ScoreDocumentViewModel>();
+            services.AddSingleton<ScoreSelectionViewModel>();
+            services.AddSingleton<NoteEditorViewModel>();
+            services.AddSingleton<TieEditorViewModel>();
+            services.AddSingleton<MeasureNavigationViewModel>();
+            services.AddSingleton<MeasureContentViewModel>();
+            services.AddSingleton<ChordEditorViewModel>();
+            services.AddSingleton<ScoreEditorViewModel>();
+            services.AddSingleton<PlaybackViewModel>();
+            services.AddSingleton<SampleLibraryViewModel>();
+            services.AddSingleton<MainViewModel>();
+            services.AddTransient<MainForm>();
+
+            return services.BuildServiceProvider();
+        }
+    }
+}

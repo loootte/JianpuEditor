@@ -1,0 +1,68 @@
+{
+  "Title": "欢乐颂",
+  "KeySignature": "1=C",
+  "Tempo": "中速",
+  "Bpm": 120,
+  "Composer": "贝多芬",
+  "Measures": [
+    {
+      "MelodyNotes": [
+        { "Type": 0, "Pitch": 3, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 3, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 4, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 5, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false }
+      ],
+      "ChordMarkers": [
+        { "Text": "C", "BeatPosition": 0.0 },
+        { "Text": "G", "BeatPosition": 2.0 }
+      ],
+      "LyricText": "欢乐女神"
+    },
+    {
+      "MelodyNotes": [
+        { "Type": 0, "Pitch": 5, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 4, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 3, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 2, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false }
+      ],
+      "ChordMarkers": [
+        { "Text": "G", "BeatPosition": 0.0 },
+        { "Text": "C", "BeatPosition": 2.0 }
+      ],
+      "LyricText": "圣洁美丽"
+    },
+    {
+      "MelodyNotes": [
+        { "Type": 0, "Pitch": 1, "Octave": 0, "Underlines": 0, "Dashes": 1, "Dotted": false }
+      ],
+      "ChordMarkers": [
+        { "Text": "F", "BeatPosition": 0.0 }
+      ],
+      "LyricText": "灿烂光芒"
+    },
+    {
+      "MelodyNotes": [
+        { "Type": 0, "Pitch": 1, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 2, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 3, "Octave": 0, "Underlines": 0, "Dashes": 0, "Dotted": false },
+        { "Type": 0, "Pitch": 2, "Octave": 0, "Underlines": 0, "Dashes": 1, "Dotted": false }
+      ],
+      "ChordMarkers": [
+        { "Text": "C", "BeatPosition": 0.0 },
+        { "Text": "G", "BeatPosition": 2.0 }
+      ],
+      "LyricText": "照大地"
+    },
+    {
+      "MelodyNotes": [
+        { "Type": 0, "Pitch": 3, "Octave": 0, "Underlines": 1, "Dashes": 0, "Dotted": true },
+        { "Type": 0, "Pitch": 3, "Octave": 0, "Underlines": 1, "Dashes": 0, "Dotted": false }
+      ],
+      "ChordMarkers": [
+        { "Text": "C", "BeatPosition": 0.0 }
+      ],
+      "LyricText": "我们欢聚"
+    }
+  ],
+  "Ties": []
+}
