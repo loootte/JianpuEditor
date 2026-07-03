@@ -20,7 +20,8 @@ namespace JianpuEditor.Glue
                 TieIndex = args.TieIndex,
                 ChordMeasureIndex = args.ChordMeasureIndex,
                 ChordMarkerIndex = args.ChordMarkerIndex,
-                SelectedMeasureIndices = args.SelectedMeasureIndices
+                SelectedMeasureIndices = args.SelectedMeasureIndices,
+                SelectedNotes = args.SelectedNotes
             };
         }
     }

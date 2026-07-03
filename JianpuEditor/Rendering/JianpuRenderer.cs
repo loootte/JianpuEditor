@@ -127,6 +127,7 @@ namespace JianpuEditor.Rendering
             int selectedTieIndex = -1,
             int selectedChordMeasureIndex = -1,
             int selectedChordMarkerIndex = -1,
+            IReadOnlyList<ScoreNoteRef> selectedNotes = null,
             ScoreLayoutOptions layoutOptions = null)
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -148,6 +149,7 @@ namespace JianpuEditor.Rendering
                 selectedTieIndex,
                 selectedChordMeasureIndex,
                 selectedChordMarkerIndex,
+                selectedNotes,
                 layoutOptions);
             _activeLayoutOptions = null;
         }
@@ -396,7 +398,7 @@ namespace JianpuEditor.Rendering
             var bitmap = new Bitmap(size.Width, size.Height);
             using (var g = Graphics.FromImage(bitmap))
             {
-                Draw(g, score, width, -1, -1, -1, null, -1, -1, -1, options);
+                Draw(g, score, width, -1, -1, -1, null, -1, -1, -1, null, options);
             }
 
             return bitmap;
@@ -631,6 +633,7 @@ namespace JianpuEditor.Rendering
             int selectedTieIndex,
             int selectedChordMeasureIndex,
             int selectedChordMarkerIndex,
+            IReadOnlyList<ScoreNoteRef> selectedNotes,
             ScoreLayoutOptions layoutOptions)
         {
             layoutOptions = layoutOptions ?? ScoreLayoutOptions.Default;
@@ -638,7 +641,8 @@ namespace JianpuEditor.Rendering
             {
                 var measureData = score.Measures[measure.MeasureIndex];
                 var isInSelection = IsMeasureSelected(measure.MeasureIndex, selectedMeasureIndices, selectedMeasureIndex);
-                var isSelectedMeasure = isInSelection && selectedInsertIndex < 0 && selectedNoteIndex < 0;
+                var hasSelectedNotes = selectedNotes != null && selectedNotes.Count > 0;
+                var isSelectedMeasure = isInSelection && selectedInsertIndex < 0 && !hasSelectedNotes && selectedNoteIndex < 0;
 
                 if (isInSelection)
                 {
@@ -657,7 +661,7 @@ namespace JianpuEditor.Rendering
                     }
                 }
 
-                DrawMelodyRow(g, measureData, measure, selectedMeasureIndex, selectedNoteIndex, selectedInsertIndex);
+                DrawMelodyRow(g, measureData, measure, selectedMeasureIndex, selectedNoteIndex, selectedInsertIndex, selectedNotes);
                 DrawChordMarkersRow(
                     g,
                     measureData,
@@ -884,7 +888,14 @@ namespace JianpuEditor.Rendering
             public float ArchTop;
         }
 
-        private void DrawMelodyRow(Graphics g, JianpuMeasure measure, MeasureLayout layout, int selectedMeasureIndex, int selectedNoteIndex, int selectedInsertIndex)
+        private void DrawMelodyRow(
+            Graphics g,
+            JianpuMeasure measure,
+            MeasureLayout layout,
+            int selectedMeasureIndex,
+            int selectedNoteIndex,
+            int selectedInsertIndex,
+            IReadOnlyList<ScoreNoteRef> selectedNotes)
         {
             if (layout.MeasureIndex == selectedMeasureIndex && selectedInsertIndex >= 0)
             {
@@ -898,7 +909,9 @@ namespace JianpuEditor.Rendering
             var noteCount = measure.MelodyNotes.Count;
             for (var i = 0; i < noteCount; i++)
             {
-                var isSelected = layout.MeasureIndex == selectedMeasureIndex && i == selectedNoteIndex;
+                var isSelected = selectedNotes != null && selectedNotes.Count > 0
+                    ? selectedNotes.Any(note => note.MeasureIndex == layout.MeasureIndex && note.NoteIndex == i)
+                    : layout.MeasureIndex == selectedMeasureIndex && i == selectedNoteIndex;
                 GetNoteDrawBounds(layout, i, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
 
                 DrawNote(

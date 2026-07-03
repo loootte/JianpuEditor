@@ -23,6 +23,28 @@ namespace JianpuEditor.Tests.ViewModels
         }
 
         [Fact]
+        public void BuildSelectionDescription_DescribesMultipleSelectedNotes()
+        {
+            var document = ViewModelTestHelper.CreateDocument();
+            var selection = new ScoreSelectionViewModel(document);
+            selection.UpdateFrom(new ScoreSelectionInfo
+            {
+                MeasureIndex = 0,
+                NoteIndex = 1,
+                SelectedNotes = new[]
+                {
+                    new ScoreNoteRef(0, 0),
+                    new ScoreNoteRef(0, 1),
+                    new ScoreNoteRef(0, 2)
+                }
+            });
+
+            var description = selection.BuildSelectionDescription();
+
+            Assert.Contains("3 个音符", description);
+        }
+
+        [Fact]
         public void BuildSelectionDescription_DescribesMultiMeasureRange()
         {
             var document = ViewModelTestHelper.CreateDocument();

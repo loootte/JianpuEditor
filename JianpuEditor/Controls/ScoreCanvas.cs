@@ -45,6 +45,8 @@ namespace JianpuEditor.Controls
         public int ChordMarkerIndex { get; set; } = -1;
 
         public IReadOnlyList<int> SelectedMeasureIndices { get; set; } = Array.Empty<int>();
+
+        public IReadOnlyList<ScoreNoteRef> SelectedNotes { get; set; } = Array.Empty<ScoreNoteRef>();
     }
 
     public sealed class ScoreCanvas : Panel
@@ -63,6 +65,9 @@ namespace JianpuEditor.Controls
         private int _editingChordMarkerIndex = -1;
         private int _selectedMeasureIndex = -1;
         private int _selectedNoteIndex = -1;
+        private readonly List<ScoreNoteRef> _selectedNotes = new List<ScoreNoteRef>();
+        private int _noteSelectionAnchorMeasure = -1;
+        private int _noteSelectionAnchorNote = -1;
         private int _selectedInsertIndex = -1;
         private int _editingMeasureIndex = -1;
         private readonly List<int> _selectedMeasureIndices = new List<int>();
@@ -183,7 +188,12 @@ namespace JianpuEditor.Controls
 
         public bool HasMelodySelection
         {
-            get { return _selectedNoteIndex >= 0 || _selectedInsertIndex >= 0; }
+            get { return _selectedNotes.Count > 0 || _selectedInsertIndex >= 0; }
+        }
+
+        public IReadOnlyList<ScoreNoteRef> GetSelectedNotes()
+        {
+            return _selectedNotes.ToArray();
         }
 
         public void NavigateSelection(bool moveLeft)
@@ -258,9 +268,17 @@ namespace JianpuEditor.Controls
 
         public void ClearMelodySelection()
         {
-            _selectedNoteIndex = -1;
+            ClearNoteSelection();
             _selectedInsertIndex = -1;
             InvalidateSelection();
+        }
+
+        private void ClearNoteSelection()
+        {
+            _selectedNoteIndex = -1;
+            _selectedNotes.Clear();
+            _noteSelectionAnchorMeasure = -1;
+            _noteSelectionAnchorNote = -1;
         }
 
         public void ClearTieSelection()
@@ -296,7 +314,7 @@ namespace JianpuEditor.Controls
             SetSelectedMeasures(new[] { measureIndex }, measureIndex, false);
             _measureSelectionAnchor = measureIndex;
             _selectedMeasureIndex = measureIndex;
-            _selectedNoteIndex = -1;
+            ClearNoteSelection();
             _selectedInsertIndex = -1;
             _selectedTieIndex = -1;
             _selectedChordMeasureIndex = measureIndex;
@@ -387,7 +405,7 @@ namespace JianpuEditor.Controls
             SetSelectedMeasures(new[] { tie.StartMeasureIndex }, tie.StartMeasureIndex, false);
             _measureSelectionAnchor = tie.StartMeasureIndex;
             _selectedMeasureIndex = tie.StartMeasureIndex;
-            _selectedNoteIndex = -1;
+            ClearNoteSelection();
             _selectedInsertIndex = -1;
             _selectedTieIndex = tieIndex;
             _selectedChordMeasureIndex = -1;
@@ -413,7 +431,7 @@ namespace JianpuEditor.Controls
             SetSelectedMeasures(new[] { measureIndex }, measureIndex, false);
             _measureSelectionAnchor = measureIndex;
             _selectedMeasureIndex = measureIndex;
-            _selectedNoteIndex = noteIndex;
+            SetSelectedNotes(new[] { new ScoreNoteRef(measureIndex, noteIndex) }, measureIndex, noteIndex);
             _selectedInsertIndex = -1;
             _selectedTieIndex = -1;
             _selectedChordMeasureIndex = -1;
@@ -439,7 +457,7 @@ namespace JianpuEditor.Controls
             SetSelectedMeasures(new[] { measureIndex }, measureIndex, false);
             _measureSelectionAnchor = measureIndex;
             _selectedMeasureIndex = measureIndex;
-            _selectedNoteIndex = -1;
+            ClearNoteSelection();
             _selectedInsertIndex = insertIndex;
             _selectedTieIndex = -1;
             _selectedChordMeasureIndex = -1;
@@ -707,17 +725,11 @@ namespace JianpuEditor.Controls
                     SelectTie(hit.TieIndex);
                     break;
                 case ScoreHitType.Note:
-                    SelectSingleMeasure(hit.MeasureIndex, false);
-                    _selectedNoteIndex = hit.NoteIndex;
-                    _selectedInsertIndex = -1;
-                    _selectedTieIndex = -1;
-                    ClearChordSelection();
-                    RaiseSelectionChanged();
-                    InvalidateSelection();
+                    HandleNoteSelectionClick(hit.MeasureIndex, hit.NoteIndex);
                     break;
                 case ScoreHitType.Gap:
                     SelectSingleMeasure(hit.MeasureIndex, false);
-                    _selectedNoteIndex = -1;
+                    ClearNoteSelection();
                     _selectedInsertIndex = hit.InsertIndex;
                     _selectedTieIndex = -1;
                     ClearChordSelection();
@@ -793,6 +805,149 @@ namespace JianpuEditor.Controls
                 RaiseSelectionChanged();
                 InvalidateSelection();
             }
+        }
+
+        private void HandleNoteSelectionClick(int measureIndex, int noteIndex)
+        {
+            CommitInlineEdit();
+            EnsureMeasures();
+            if (measureIndex < 0 || measureIndex >= _score.Measures.Count)
+            {
+                return;
+            }
+
+            var notes = _score.Measures[measureIndex].MelodyNotes;
+            if (noteIndex < 0 || noteIndex >= notes.Count)
+            {
+                return;
+            }
+
+            var clicked = new ScoreNoteRef(measureIndex, noteIndex);
+            var modifiers = Control.ModifierKeys;
+            if ((modifiers & Keys.Shift) == Keys.Shift
+                && _noteSelectionAnchorMeasure >= 0
+                && _noteSelectionAnchorNote >= 0)
+            {
+                var anchor = new ScoreNoteRef(_noteSelectionAnchorMeasure, _noteSelectionAnchorNote);
+                var range = NoteSelectionRange.Enumerate(_score, anchor, clicked);
+                var next = new List<ScoreNoteRef>(_selectedNotes);
+                if (NoteSelectionRange.ContainsAll(next, range))
+                {
+                    foreach (var item in range)
+                    {
+                        next.RemoveAll(existing => existing.Equals(item));
+                    }
+                }
+                else
+                {
+                    foreach (var item in range)
+                    {
+                        if (!next.Any(existing => existing.Equals(item)))
+                        {
+                            next.Add(item);
+                        }
+                    }
+                }
+
+                next.Sort((left, right) => ScoreNoteRef.Compare(left, right));
+                ApplyNoteSelection(next, measureIndex, noteIndex);
+                return;
+            }
+
+            if ((modifiers & Keys.Control) == Keys.Control)
+            {
+                var next = new List<ScoreNoteRef>(_selectedNotes);
+                if (next.Any(existing => existing.Equals(clicked)))
+                {
+                    next.RemoveAll(existing => existing.Equals(clicked));
+                }
+                else
+                {
+                    next.Add(clicked);
+                }
+
+                next.Sort((left, right) => ScoreNoteRef.Compare(left, right));
+                if (next.Count == 0)
+                {
+                    ClearMelodySelection();
+                    SelectSingleMeasure(measureIndex, false);
+                    ClearChordSelection();
+                    RaiseSelectionChanged();
+                    InvalidateSelection();
+                    return;
+                }
+
+                ApplyNoteSelection(next, measureIndex, noteIndex);
+                return;
+            }
+
+            SetSelectedMeasures(new[] { measureIndex }, measureIndex, false);
+            _measureSelectionAnchor = measureIndex;
+            SetSelectedNotes(new[] { clicked }, measureIndex, noteIndex);
+            _selectedInsertIndex = -1;
+            _selectedTieIndex = -1;
+            ClearChordSelection();
+            RaiseSelectionChanged();
+            InvalidateSelection();
+        }
+
+        private void ApplyNoteSelection(IReadOnlyList<ScoreNoteRef> notes, int primaryMeasureIndex, int primaryNoteIndex)
+        {
+            SetSelectedMeasures(new[] { primaryMeasureIndex }, primaryMeasureIndex, false);
+            _measureSelectionAnchor = primaryMeasureIndex;
+            SetSelectedNotes(notes, primaryMeasureIndex, primaryNoteIndex);
+            _selectedInsertIndex = -1;
+            _selectedTieIndex = -1;
+            ClearChordSelection();
+            RaiseSelectionChanged();
+            InvalidateSelection();
+        }
+
+        private void SetSelectedNotes(IReadOnlyList<ScoreNoteRef> notes, int primaryMeasureIndex, int primaryNoteIndex)
+        {
+            _selectedNotes.Clear();
+            if (notes != null)
+            {
+                foreach (var note in notes.OrderBy(item => item, Comparer<ScoreNoteRef>.Create(ScoreNoteRef.Compare)))
+                {
+                    if (note.MeasureIndex < 0 || note.MeasureIndex >= _score.Measures.Count)
+                    {
+                        continue;
+                    }
+
+                    var melodyNotes = _score.Measures[note.MeasureIndex].MelodyNotes;
+                    if (note.NoteIndex < 0 || note.NoteIndex >= melodyNotes.Count)
+                    {
+                        continue;
+                    }
+
+                    if (_selectedNotes.Any(existing => existing.Equals(note)))
+                    {
+                        continue;
+                    }
+
+                    _selectedNotes.Add(note);
+                }
+            }
+
+            if (_selectedNotes.Count == 0)
+            {
+                _selectedNoteIndex = -1;
+                _noteSelectionAnchorMeasure = -1;
+                _noteSelectionAnchorNote = -1;
+                return;
+            }
+
+            var primary = new ScoreNoteRef(primaryMeasureIndex, primaryNoteIndex);
+            if (!_selectedNotes.Any(existing => existing.Equals(primary)))
+            {
+                primary = _selectedNotes[_selectedNotes.Count - 1];
+            }
+
+            _selectedMeasureIndex = primary.MeasureIndex;
+            _selectedNoteIndex = primary.NoteIndex;
+            _noteSelectionAnchorMeasure = primary.MeasureIndex;
+            _noteSelectionAnchorNote = primary.NoteIndex;
         }
 
         private void HandleMeasureSelectionClick(int measureIndex)
@@ -1075,7 +1230,8 @@ namespace JianpuEditor.Controls
                 TieIndex = _selectedTieIndex,
                 ChordMeasureIndex = _selectedChordMeasureIndex,
                 ChordMarkerIndex = _selectedChordMarkerIndex,
-                SelectedMeasureIndices = _selectedMeasureIndices.ToArray()
+                SelectedMeasureIndices = _selectedMeasureIndices.ToArray(),
+                SelectedNotes = _selectedNotes.ToArray()
             });
         }
 
@@ -1119,6 +1275,7 @@ namespace JianpuEditor.Controls
                     _selectedTieIndex,
                     _selectedChordMeasureIndex,
                     _selectedChordMarkerIndex,
+                    _selectedNotes,
                     ScoreLayoutOptions.Editor);
             }
 

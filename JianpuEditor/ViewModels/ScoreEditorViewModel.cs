@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
+using JianpuEditor.Models;
 using JianpuEditor.Services;
 
 namespace JianpuEditor.ViewModels
@@ -62,21 +65,48 @@ namespace JianpuEditor.ViewModels
             var measureIndex = Math.Max(0, _selection.MeasureIndex);
             var measure = _document.Score.Measures[measureIndex];
 
-            if (_selection.HasNoteSelected
-                && _selection.NoteIndex >= 0
-                && _selection.NoteIndex < measure.MelodyNotes.Count)
+            if (_selection.HasNoteSelected)
             {
-                var noteIndex = _selection.NoteIndex;
-                measure.MelodyNotes.RemoveAt(noteIndex);
-                TieMaintenanceService.OnNoteRemoved(_document.Score, measureIndex, noteIndex);
-                _messenger.Send(new ScoreEditedMessage("已删除选中音符"));
-                return new ScoreEditResult
+                var refs = GetSelectedNoteRefs();
+                if (refs.Count > 0)
                 {
-                    Changed = true,
-                    Message = "已删除选中音符",
-                    ClearMelodySelection = true,
-                    ClearTieSelection = true
-                };
+                    var removedCount = 0;
+                    foreach (var group in refs.GroupBy(item => item.MeasureIndex).OrderByDescending(item => item.Key))
+                    {
+                        if (group.Key < 0 || group.Key >= _document.Score.Measures.Count)
+                        {
+                            continue;
+                        }
+
+                        var targetMeasure = _document.Score.Measures[group.Key];
+                        foreach (var noteIndex in group.Select(item => item.NoteIndex).Distinct().OrderByDescending(item => item))
+                        {
+                            if (noteIndex < 0 || noteIndex >= targetMeasure.MelodyNotes.Count)
+                            {
+                                continue;
+                            }
+
+                            targetMeasure.MelodyNotes.RemoveAt(noteIndex);
+                            TieMaintenanceService.OnNoteRemoved(_document.Score, group.Key, noteIndex);
+                            removedCount++;
+                        }
+                    }
+
+                    if (removedCount > 0)
+                    {
+                        var message = removedCount > 1
+                            ? "已删除 " + removedCount + " 个选中音符"
+                            : "已删除选中音符";
+                        _messenger.Send(new ScoreEditedMessage(message));
+                        return new ScoreEditResult
+                        {
+                            Changed = true,
+                            Message = message,
+                            ClearMelodySelection = true,
+                            ClearTieSelection = true
+                        };
+                    }
+                }
             }
 
             if (measure.MelodyNotes.Count > 0)
@@ -125,6 +155,24 @@ namespace JianpuEditor.ViewModels
                 Message = "谱面已清空",
                 SelectMeasureIndex = 0
             };
+        }
+
+        private List<ScoreNoteRef> GetSelectedNoteRefs()
+        {
+            if (_selection.SelectedNotes != null && _selection.SelectedNotes.Count > 0)
+            {
+                return _selection.SelectedNotes.ToList();
+            }
+
+            if (_selection.NoteIndex >= 0 && _selection.MeasureIndex >= 0)
+            {
+                return new List<ScoreNoteRef>
+                {
+                    new ScoreNoteRef(_selection.MeasureIndex, _selection.NoteIndex)
+                };
+            }
+
+            return new List<ScoreNoteRef>();
         }
     }
 }

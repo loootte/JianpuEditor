@@ -16,6 +16,7 @@ namespace JianpuEditor.ViewModels
         private int _chordMeasureIndex = -1;
         private int _chordMarkerIndex = -1;
         private IReadOnlyList<int> _selectedMeasureIndices = Array.Empty<int>();
+        private IReadOnlyList<ScoreNoteRef> _selectedNotes = Array.Empty<ScoreNoteRef>();
 
         public ScoreSelectionViewModel(ScoreDocumentViewModel document)
         {
@@ -64,9 +65,20 @@ namespace JianpuEditor.ViewModels
             private set { SetProperty(ref _selectedMeasureIndices, value); }
         }
 
+        public IReadOnlyList<ScoreNoteRef> SelectedNotes
+        {
+            get { return _selectedNotes; }
+            private set { SetProperty(ref _selectedNotes, value); }
+        }
+
         public bool HasNoteSelected
         {
-            get { return NoteIndex >= 0; }
+            get { return SelectedNotes != null && SelectedNotes.Count > 0 || NoteIndex >= 0; }
+        }
+
+        public bool HasMultipleNotesSelected
+        {
+            get { return SelectedNotes != null && SelectedNotes.Count > 1; }
         }
 
         public bool HasGapSelected
@@ -98,6 +110,7 @@ namespace JianpuEditor.ViewModels
             ChordMeasureIndex = info.ChordMeasureIndex;
             ChordMarkerIndex = info.ChordMarkerIndex;
             SelectedMeasureIndices = info.SelectedMeasureIndices ?? Array.Empty<int>();
+            SelectedNotes = info.SelectedNotes ?? Array.Empty<ScoreNoteRef>();
         }
 
         public string BuildSelectionDescription()
@@ -131,6 +144,11 @@ namespace JianpuEditor.ViewModels
             {
                 return "已选择第 " + (SelectedMeasureIndices.Min() + 1) + " 到第 " +
                        (SelectedMeasureIndices.Max() + 1) + " 小节，可点击「复制小节」";
+            }
+
+            if (HasMultipleNotesSelected)
+            {
+                return "已选中 " + SelectedNotes.Count + " 个音符，可用上方按钮批量修改";
             }
 
             if (HasNoteSelected)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JianpuEditor.Core.Messaging;
@@ -53,12 +54,18 @@ namespace JianpuEditor.ViewModels
 
         public ScoreEditResult AddNote(int pitch)
         {
-            var selected = GetSelectedNote();
-            if (selected != null)
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
             {
-                selected.Type = NoteType.Note;
-                selected.Pitch = pitch;
-                return PublishEdit("已修改选中音符为 " + pitch);
+                foreach (var selected in selectedNotes)
+                {
+                    selected.Type = NoteType.Note;
+                    selected.Pitch = pitch;
+                }
+
+                return PublishEdit(selectedNotes.Count > 1
+                    ? "已修改 " + selectedNotes.Count + " 个选中音符为 " + pitch
+                    : "已修改选中音符为 " + pitch);
             }
 
             var note = ClonePendingNote();
@@ -69,12 +76,18 @@ namespace JianpuEditor.ViewModels
 
         public ScoreEditResult AddRest()
         {
-            var selected = GetSelectedNote();
-            if (selected != null)
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
             {
-                selected.Type = NoteType.Rest;
-                selected.Pitch = 0;
-                return PublishEdit("已修改选中音符为休止符");
+                foreach (var selected in selectedNotes)
+                {
+                    selected.Type = NoteType.Rest;
+                    selected.Pitch = 0;
+                }
+
+                return PublishEdit(selectedNotes.Count > 1
+                    ? "已修改 " + selectedNotes.Count + " 个选中音符为休止符"
+                    : "已修改选中音符为休止符");
             }
 
             var note = ClonePendingNote();
@@ -85,11 +98,17 @@ namespace JianpuEditor.ViewModels
 
         public ScoreEditResult SetOctave(int octave)
         {
-            var selected = GetSelectedNote();
-            if (selected != null)
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
             {
-                selected.Octave = selected.Octave == octave ? 0 : octave;
-                return PublishEdit("已修改选中音符八度");
+                foreach (var selected in selectedNotes)
+                {
+                    selected.Octave = selected.Octave == octave ? 0 : octave;
+                }
+
+                return PublishEdit(selectedNotes.Count > 1
+                    ? "已修改 " + selectedNotes.Count + " 个选中音符八度"
+                    : "已修改选中音符八度");
             }
 
             _pendingNote.Octave = _pendingNote.Octave == octave ? 0 : octave;
@@ -100,11 +119,18 @@ namespace JianpuEditor.ViewModels
 
         public ScoreEditResult ToggleDotted()
         {
-            var selected = GetSelectedNote();
-            if (selected != null)
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
             {
-                selected.Dotted = !selected.Dotted;
-                return PublishEdit(selected.Dotted ? "已为选中音符添加附点" : "已移除选中音符附点");
+                foreach (var selected in selectedNotes)
+                {
+                    selected.Dotted = !selected.Dotted;
+                }
+
+                var dotted = selectedNotes[0].Dotted;
+                return PublishEdit(selectedNotes.Count > 1
+                    ? (dotted ? "已为 " + selectedNotes.Count + " 个选中音符添加附点" : "已移除 " + selectedNotes.Count + " 个选中音符附点")
+                    : (dotted ? "已为选中音符添加附点" : "已移除选中音符附点"));
             }
 
             _pendingNote.Dotted = !_pendingNote.Dotted;
@@ -124,10 +150,10 @@ namespace JianpuEditor.ViewModels
 
         private ScoreEditResult StepDuration(int delta)
         {
-            var selected = GetSelectedNote();
-            if (selected != null)
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
             {
-                var tier = GetDurationTier(selected);
+                var tier = GetDurationTier(selectedNotes[0]);
                 var nextTier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, tier + delta));
                 if (nextTier == tier)
                 {
@@ -135,8 +161,14 @@ namespace JianpuEditor.ViewModels
                     return PublishEdit(limit + "（" + GetDurationTierLabel(tier) + "）");
                 }
 
-                ApplyDurationTier(selected, nextTier);
-                return PublishEdit("时值: " + GetDurationTierLabel(nextTier));
+                foreach (var selected in selectedNotes)
+                {
+                    ApplyDurationTier(selected, nextTier);
+                }
+
+                return PublishEdit(selectedNotes.Count > 1
+                    ? "时值: " + GetDurationTierLabel(nextTier) + "（" + selectedNotes.Count + " 个音符）"
+                    : "时值: " + GetDurationTierLabel(nextTier));
             }
 
             var pendingTier = GetDurationTier(_pendingNote);
@@ -176,27 +208,50 @@ namespace JianpuEditor.ViewModels
             return result;
         }
 
-        private JianpuNote GetSelectedNote()
+        private List<JianpuNote> GetSelectedNotes()
         {
+            var result = new List<JianpuNote>();
             if (!_selection.HasNoteSelected)
             {
-                return null;
+                return result;
             }
 
             _document.EnsureMeasures();
+            if (_selection.SelectedNotes != null && _selection.SelectedNotes.Count > 0)
+            {
+                foreach (var selected in _selection.SelectedNotes)
+                {
+                    if (selected.MeasureIndex < 0 || selected.MeasureIndex >= _document.Score.Measures.Count)
+                    {
+                        continue;
+                    }
+
+                    var notes = _document.Score.Measures[selected.MeasureIndex].MelodyNotes;
+                    if (selected.NoteIndex < 0 || selected.NoteIndex >= notes.Count)
+                    {
+                        continue;
+                    }
+
+                    result.Add(notes[selected.NoteIndex]);
+                }
+
+                return result;
+            }
+
             var measureIndex = _selection.MeasureIndex;
             if (measureIndex < 0 || measureIndex >= _document.Score.Measures.Count)
             {
-                return null;
+                return result;
             }
 
-            var notes = _document.Score.Measures[measureIndex].MelodyNotes;
-            if (_selection.NoteIndex < 0 || _selection.NoteIndex >= notes.Count)
+            var melodyNotes = _document.Score.Measures[measureIndex].MelodyNotes;
+            if (_selection.NoteIndex < 0 || _selection.NoteIndex >= melodyNotes.Count)
             {
-                return null;
+                return result;
             }
 
-            return notes[_selection.NoteIndex];
+            result.Add(melodyNotes[_selection.NoteIndex]);
+            return result;
         }
 
         private JianpuNote ClonePendingNote()
