@@ -16,6 +16,7 @@ namespace JianpuEditor.ViewModels
     {
         private readonly ScoreDocumentViewModel _document;
         private readonly ScoreSelectionViewModel _selection;
+        private readonly MeasureNavigationViewModel _navigation;
         private readonly IAppMessenger _messenger;
         private readonly IEditCommandHistory _history;
         private JianpuNote _pendingNote = CreateDefaultNote();
@@ -23,11 +24,13 @@ namespace JianpuEditor.ViewModels
         public NoteEditorViewModel(
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
+            MeasureNavigationViewModel navigation,
             IAppMessenger messenger,
             IEditCommandHistory history)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
             _selection = selection ?? throw new ArgumentNullException(nameof(selection));
+            _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             _history = history ?? throw new ArgumentNullException(nameof(history));
 
@@ -127,6 +130,28 @@ namespace JianpuEditor.ViewModels
             note.Type = NoteType.Rest;
             note.Pitch = 0;
             return InsertMelodyNote(note, "已插入休止符");
+        }
+
+        public ScoreEditResult AppendNote(int pitch, bool copyPreviousNoteStyle = false)
+        {
+            var note = CreateAppendNote(copyPreviousNoteStyle);
+            note.Type = NoteType.Note;
+            note.Pitch = pitch;
+            var message = copyPreviousNoteStyle
+                ? "已追加音符 " + pitch + "（复制上一音符时值/八度）"
+                : "已追加音符 " + pitch;
+            return InsertMelodyNoteAt(GetCurrentMeasureIndex(), note, message);
+        }
+
+        public ScoreEditResult AppendRest(bool copyPreviousNoteStyle = false)
+        {
+            var note = CreateAppendNote(copyPreviousNoteStyle);
+            note.Type = NoteType.Rest;
+            note.Pitch = 0;
+            var message = copyPreviousNoteStyle
+                ? "已追加休止符（复制上一音符时值/八度）"
+                : "已追加休止符";
+            return InsertMelodyNoteAt(GetCurrentMeasureIndex(), note, message);
         }
 
         public ScoreEditResult SetOctave(int octave)
@@ -338,6 +363,19 @@ namespace JianpuEditor.ViewModels
                 insertIndex = measure.MelodyNotes.Count;
             }
 
+            return InsertMelodyNoteAt(measureIndex, insertIndex, note, message);
+        }
+
+        private ScoreEditResult InsertMelodyNoteAt(int measureIndex, JianpuNote note, string message)
+        {
+            _document.EnsureMeasures();
+            measureIndex = Math.Max(0, Math.Min(measureIndex, _document.Score.Measures.Count - 1));
+            var insertIndex = _document.Score.Measures[measureIndex].MelodyNotes.Count;
+            return InsertMelodyNoteAt(measureIndex, insertIndex, note, message);
+        }
+
+        private ScoreEditResult InsertMelodyNoteAt(int measureIndex, int insertIndex, JianpuNote note, string message)
+        {
             return ExecuteCommand(new InsertMelodyNoteCommand(
                 _document.Score,
                 _messenger,
@@ -346,6 +384,37 @@ namespace JianpuEditor.ViewModels
                 note,
                 message,
                 ResetPendingModifiers));
+        }
+
+        private int GetCurrentMeasureIndex()
+        {
+            _document.EnsureMeasures();
+            return Math.Max(0, Math.Min(_navigation.CurrentMeasureIndex, _document.Score.Measures.Count - 1));
+        }
+
+        private JianpuNote CreateAppendNote(bool copyPreviousNoteStyle)
+        {
+            _document.EnsureMeasures();
+            var measure = _document.Score.Measures[GetCurrentMeasureIndex()];
+            if (copyPreviousNoteStyle && measure.MelodyNotes.Count > 0)
+            {
+                return CloneNoteStyle(measure.MelodyNotes[measure.MelodyNotes.Count - 1]);
+            }
+
+            return ClonePendingNote();
+        }
+
+        private static JianpuNote CloneNoteStyle(JianpuNote source)
+        {
+            return new JianpuNote
+            {
+                Type = source.Type,
+                Pitch = source.Pitch,
+                Octave = source.Octave,
+                Underlines = source.Underlines,
+                Dashes = source.Dashes,
+                Dotted = source.Dotted
+            };
         }
 
         private ScoreEditResult ApplySplitSelectedNotes(IReadOnlyList<ScoreNoteRef> refs)

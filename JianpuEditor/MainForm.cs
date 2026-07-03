@@ -44,7 +44,11 @@ namespace JianpuEditor
         private ToolStripMenuItem _fillPlaceholdersMenuItem;
         private ToolStripMenuItem _undoMenuItem;
         private ToolStripMenuItem _redoMenuItem;
+        private readonly ToolTip _toolTip = new ToolTip();
         private bool _isExecutingHistoryChange;
+
+        private const string NoteButtonToolTip =
+            "点击：在选中位置插入或修改音符\r\n按住 Ctrl 点击：追加到当前小节末尾\r\n按住 Ctrl+Shift 点击：追加并复制上一音符时值/八度";
 
         public MainForm(
             MainViewModel viewModel,
@@ -290,11 +294,10 @@ namespace JianpuEditor
             panel.Controls.Add(new Label { Text = "音符:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
             for (var pitch = 1; pitch <= 7; pitch++)
             {
-                var p = pitch;
-                panel.Controls.Add(CreateToolButton(p.ToString(), () => ExecuteNoteEdit(() => _viewModel.NoteEditor.AddNote(p))));
+                panel.Controls.Add(CreateNoteButton(pitch));
             }
 
-            panel.Controls.Add(CreateToolButton("0", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.AddRest())));
+            panel.Controls.Add(CreateRestButton());
             panel.Controls.Add(CreateToolButton("新小节", ExecuteAddMeasure));
             panel.Controls.Add(CreateSeparator());
 
@@ -369,6 +372,69 @@ namespace JianpuEditor
             };
             button.Click += (s, e) => onClick();
             return button;
+        }
+
+        private Button CreateNoteButton(int pitch)
+        {
+            var text = pitch.ToString();
+            var button = new Button
+            {
+                Text = text,
+                Width = 42,
+                Height = 34,
+                Margin = new Padding(4, 4, 4, 4)
+            };
+            _toolTip.SetToolTip(button, NoteButtonToolTip);
+            button.Click += (s, e) => OnNoteButtonClick(pitch);
+            return button;
+        }
+
+        private Button CreateRestButton()
+        {
+            var button = new Button
+            {
+                Text = "0",
+                Width = 42,
+                Height = 34,
+                Margin = new Padding(4, 4, 4, 4)
+            };
+            _toolTip.SetToolTip(button, NoteButtonToolTip);
+            button.Click += (s, e) => OnRestButtonClick();
+            return button;
+        }
+
+        private void OnNoteButtonClick(int pitch)
+        {
+            if (IsAppendModifierActive())
+            {
+                var copyStyle = IsCopyStyleModifierActive();
+                ExecuteNoteEdit(() => _viewModel.NoteEditor.AppendNote(pitch, copyStyle));
+                return;
+            }
+
+            ExecuteNoteEdit(() => _viewModel.NoteEditor.AddNote(pitch));
+        }
+
+        private void OnRestButtonClick()
+        {
+            if (IsAppendModifierActive())
+            {
+                var copyStyle = IsCopyStyleModifierActive();
+                ExecuteNoteEdit(() => _viewModel.NoteEditor.AppendRest(copyStyle));
+                return;
+            }
+
+            ExecuteNoteEdit(() => _viewModel.NoteEditor.AddRest());
+        }
+
+        private static bool IsAppendModifierActive()
+        {
+            return (Control.ModifierKeys & Keys.Control) == Keys.Control;
+        }
+
+        private static bool IsCopyStyleModifierActive()
+        {
+            return IsAppendModifierActive() && (Control.ModifierKeys & Keys.Shift) == Keys.Shift;
         }
 
         private static Panel CreateSeparator()
