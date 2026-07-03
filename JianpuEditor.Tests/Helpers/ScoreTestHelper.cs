@@ -51,6 +51,27 @@ namespace JianpuEditor.Tests.Helpers
             return measure;
         }
 
+        public static JianpuMeasure MeasureWithLyrics(
+            string lyricText,
+            string[] syllableTexts,
+            int[] noteIndices,
+            params JianpuNote[] notes)
+        {
+            var measure = Measure(notes);
+            measure.LyricText = lyricText ?? string.Empty;
+            measure.LyricSyllables = new List<LyricSyllable>();
+            for (var i = 0; i < syllableTexts.Length; i++)
+            {
+                measure.LyricSyllables.Add(new LyricSyllable
+                {
+                    Text = syllableTexts[i],
+                    NoteIndex = noteIndices[i]
+                });
+            }
+
+            return measure;
+        }
+
         public static JianpuScore CreateScore(params JianpuMeasure[] measures)
         {
             return new JianpuScore

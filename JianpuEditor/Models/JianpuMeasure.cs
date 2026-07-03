@@ -10,6 +10,8 @@ namespace JianpuEditor.Models
 
         public List<ChordMarker> ChordMarkers { get; set; } = new List<ChordMarker>();
 
+        public List<LyricSyllable> LyricSyllables { get; set; } = new List<LyricSyllable>();
+
         public string LyricText { get; set; } = string.Empty;
     }
 }
