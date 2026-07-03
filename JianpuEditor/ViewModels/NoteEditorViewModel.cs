@@ -28,8 +28,8 @@ namespace JianpuEditor.ViewModels
             SetOctaveUpCommand = new RelayCommand(() => SetOctave(1));
             SetOctaveDownCommand = new RelayCommand(() => SetOctave(-1));
             ToggleDottedCommand = new RelayCommand(() => ToggleDotted());
-            CycleDurationCommand = new RelayCommand(() => CycleDuration());
-            CycleExtensionCommand = new RelayCommand(() => CycleExtension());
+            DecreaseDurationCommand = new RelayCommand(() => DecreaseDuration());
+            IncreaseDurationCommand = new RelayCommand(() => IncreaseDuration());
         }
 
         public RelayCommand<int> AddNoteCommand { get; }
@@ -42,9 +42,9 @@ namespace JianpuEditor.ViewModels
 
         public RelayCommand ToggleDottedCommand { get; }
 
-        public RelayCommand CycleDurationCommand { get; }
+        public RelayCommand DecreaseDurationCommand { get; }
 
-        public RelayCommand CycleExtensionCommand { get; }
+        public RelayCommand IncreaseDurationCommand { get; }
 
         public JianpuNote PendingNote
         {
@@ -112,43 +112,37 @@ namespace JianpuEditor.ViewModels
             return ScoreEditResult.Unchanged;
         }
 
-        public ScoreEditResult CycleDuration()
+        public ScoreEditResult DecreaseDuration()
         {
-            var selected = GetSelectedNote();
-            if (selected != null)
-            {
-                selected.Underlines = (selected.Underlines + 1) % 3;
-                selected.Dashes = 0;
-                return PublishEdit("时值: " + GetDurationLabel(selected.Underlines));
-            }
-
-            _pendingNote.Underlines = (_pendingNote.Underlines + 1) % 3;
-            _pendingNote.Dashes = 0;
-            _messenger.Send(new StatusChangedMessage("下一音符时值: " + GetDurationLabel(_pendingNote.Underlines)));
-            return ScoreEditResult.Unchanged;
+            return StepDuration(-1);
         }
 
-        public ScoreEditResult CycleExtension()
+        public ScoreEditResult IncreaseDuration()
+        {
+            return StepDuration(1);
+        }
+
+        private ScoreEditResult StepDuration(int delta)
         {
             var selected = GetSelectedNote();
             if (selected != null)
             {
-                selected.Dashes = (selected.Dashes + 1) % 4;
-                if (selected.Dashes > 0)
+                var tier = GetDurationTier(selected);
+                var nextTier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, tier + delta));
+                if (nextTier == tier)
                 {
-                    selected.Underlines = 0;
+                    var limit = delta > 0 ? "已达最长时值" : "已达最短时值";
+                    return PublishEdit(limit + "（" + GetDurationTierLabel(tier) + "）");
                 }
 
-                return PublishEdit("延长: " + GetExtensionLabel(selected.Dashes));
+                ApplyDurationTier(selected, nextTier);
+                return PublishEdit("时值: " + GetDurationTierLabel(nextTier));
             }
 
-            _pendingNote.Dashes = (_pendingNote.Dashes + 1) % 4;
-            if (_pendingNote.Dashes > 0)
-            {
-                _pendingNote.Underlines = 0;
-            }
-
-            _messenger.Send(new StatusChangedMessage("下一音符延长: " + GetExtensionLabel(_pendingNote.Dashes)));
+            var pendingTier = GetDurationTier(_pendingNote);
+            var nextPendingTier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, pendingTier + delta));
+            ApplyDurationTier(_pendingNote, nextPendingTier);
+            _messenger.Send(new StatusChangedMessage("下一音符时值: " + GetDurationTierLabel(nextPendingTier)));
             return ScoreEditResult.Unchanged;
         }
 
@@ -231,24 +225,59 @@ namespace JianpuEditor.ViewModels
             };
         }
 
-        private static string GetDurationLabel(int underlines)
+        private const int MinDurationTier = 0;
+        private const int MaxDurationTier = 5;
+
+        internal static int GetDurationTier(JianpuNote note)
         {
-            switch (underlines)
+            if (note == null)
             {
-                case 1: return "八分音符";
-                case 2: return "十六分音符";
-                default: return "四分音符";
+                return 2;
             }
+
+            if (note.Dashes > 0)
+            {
+                return Math.Min(MaxDurationTier, 2 + note.Dashes);
+            }
+
+            return Math.Max(MinDurationTier, 2 - Math.Min(2, note.Underlines));
         }
 
-        private static string GetExtensionLabel(int dashes)
+        internal static void ApplyDurationTier(JianpuNote note, int tier)
         {
-            switch (dashes)
+            if (note == null)
             {
-                case 1: return "延一拍";
-                case 2: return "延两拍";
-                case 3: return "延三拍";
-                default: return "不延长";
+                return;
+            }
+
+            tier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, tier));
+            if (tier <= 2)
+            {
+                note.Dashes = 0;
+                note.Underlines = 2 - tier;
+                return;
+            }
+
+            note.Underlines = 0;
+            note.Dashes = tier - 2;
+        }
+
+        private static string GetDurationTierLabel(int tier)
+        {
+            switch (tier)
+            {
+                case 0:
+                    return "1/16";
+                case 1:
+                    return "1/8";
+                case 3:
+                    return "延1拍";
+                case 4:
+                    return "延2拍";
+                case 5:
+                    return "延3拍";
+                default:
+                    return "1/4";
             }
         }
 

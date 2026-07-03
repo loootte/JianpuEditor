@@ -263,8 +263,8 @@ namespace JianpuEditor
             panel.Controls.Add(CreateToolButton("高音·", () => _viewModel.NoteEditor.SetOctaveUpCommand.Execute(null)));
             panel.Controls.Add(CreateToolButton("低音·", () => _viewModel.NoteEditor.SetOctaveDownCommand.Execute(null)));
             panel.Controls.Add(CreateToolButton("附点", () => ExecuteEdit(() => _viewModel.NoteEditor.ToggleDotted())));
-            panel.Controls.Add(CreateToolButton("增时线", () => ExecuteEdit(() => _viewModel.NoteEditor.CycleExtension())));
-            panel.Controls.Add(CreateToolButton("减时线", () => ExecuteEdit(() => _viewModel.NoteEditor.CycleDuration())));
+            panel.Controls.Add(CreateToolButton("增时+", () => ExecuteEdit(() => _viewModel.NoteEditor.IncreaseDuration())));
+            panel.Controls.Add(CreateToolButton("减时-", () => ExecuteEdit(() => _viewModel.NoteEditor.DecreaseDuration())));
             _tieButton = CreateToolButton("连音线", () => _viewModel.TieEditor.ToggleTieModeCommand.Execute(null));
             panel.Controls.Add(_tieButton);
             panel.Controls.Add(CreateSeparator());
