@@ -109,7 +109,7 @@ git push origin v1.0.1
 | 转调 | 工具栏「转调」或菜单「和弦转调...」；仅转调和弦标识 |
 | 导出 PDF / MIDI | 菜单或工具栏导出 |
 
-启动后自动加载《欢乐颂》示例曲谱，也可点工具栏「示例」重新载入。
+启动后自动加载《欢乐颂》示例曲谱。`sample/` 目录提供更多示例（如《卡农》），可通过 **文件 → 示例曲库** 或工具栏 **曲库** 加载。
 
 ## 和弦标识
 
@@ -171,6 +171,7 @@ JianpuEditor/
   Services/                # JSON/PDF/MIDI、播放、和弦解析/转调、连音线维护
   installer/               # Inno Setup 安装脚本
   scripts/                 # 构建与测试脚本
+  sample/                  # 示例曲库（.jianpu / .json）
 JianpuEditor.Tests/        # xUnit 单元测试（核心服务与模型）
 ```
 

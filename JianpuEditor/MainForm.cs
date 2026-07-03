@@ -35,6 +35,7 @@ namespace JianpuEditor
         private Button _tieButton;
         private Button _playButton;
         private Button _stopButton;
+        private ContextMenuStrip _sampleLibraryMenu;
         private readonly ScorePlaybackService _playbackService = new ScorePlaybackService();
 
         public MainForm()
@@ -121,6 +122,11 @@ namespace JianpuEditor
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add(CreateMenuItem("导出 PDF...", Keys.Control | Keys.P, OnExportPdf));
             fileMenu.DropDownItems.Add(CreateMenuItem("导出 MIDI...", Keys.None, OnExportMidi));
+            fileMenu.DropDownItems.Add(new ToolStripSeparator());
+            var sampleMenu = new ToolStripMenuItem("示例曲库");
+            sampleMenu.DropDownOpening += (s, e) => PopulateSampleLibraryMenu(sampleMenu.DropDownItems);
+            PopulateSampleLibraryMenu(sampleMenu.DropDownItems);
+            fileMenu.DropDownItems.Add(sampleMenu);
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add(CreateMenuItem("退出", Keys.None, (s, e) => Close()));
 
@@ -270,7 +276,11 @@ namespace JianpuEditor
             panel.Controls.Add(CreateSeparator());
             panel.Controls.Add(CreateToolButton("删除", DeleteLast));
             panel.Controls.Add(CreateToolButton("清空", () => OnClearScore(null, EventArgs.Empty)));
-            panel.Controls.Add(CreateToolButton("示例", LoadDemoScore));
+            _sampleLibraryMenu = new ContextMenuStrip();
+            _sampleLibraryMenu.Opening += (s, e) => PopulateSampleLibraryMenu(_sampleLibraryMenu.Items);
+            var sampleButton = CreateToolButton("曲库", () => { });
+            sampleButton.Click += (s, e) => _sampleLibraryMenu.Show(sampleButton, new Point(0, sampleButton.Height));
+            panel.Controls.Add(sampleButton);
 
             Controls.Add(panel);
         }
@@ -1056,9 +1066,55 @@ namespace JianpuEditor
             }
         }
 
+        private void PopulateSampleLibraryMenu(ToolStripItemCollection items)
+        {
+            items.Clear();
+            items.Add(CreateMenuItem("欢乐颂（内置）", Keys.None, (s, e) => LoadDemoScore()));
+            items.Add(new ToolStripSeparator());
+
+            var sampleFiles = SampleLibraryService.ListSampleFiles();
+            if (sampleFiles.Count == 0)
+            {
+                items.Add(new ToolStripMenuItem("(sample 目录暂无文件)") { Enabled = false });
+                return;
+            }
+
+            foreach (var sampleFile in sampleFiles)
+            {
+                var path = sampleFile;
+                var label = SampleLibraryService.GetDisplayName(sampleFile);
+                items.Add(CreateMenuItem(label, Keys.None, (s, e) => LoadSampleScore(path)));
+            }
+        }
+
+        private void LoadSampleScore(string path)
+        {
+            try
+            {
+                StopPlayback();
+                CancelTieMode();
+                var score = ScoreFileService.Load(path);
+                _canvas.Score = score;
+                SyncHeaderFieldsFromScore();
+                _currentFilePath = null;
+                Text = "简谱编辑器 - " + SampleLibraryService.GetDisplayName(path);
+                SelectMeasure(0);
+                ResetPlaybackHead();
+                RefreshAfterEdit("已加载示例曲谱：" + score.Title);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Exception("加载示例曲谱失败: " + path, ex);
+                MessageBox.Show("加载示例曲谱失败: " + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void LoadDemoScore()
         {
             StopPlayback();
+            CancelTieMode();
+            _currentFilePath = null;
+            Text = "简谱编辑器";
             _canvas.Score = new JianpuScore
             {
                 Title = "欢乐颂",

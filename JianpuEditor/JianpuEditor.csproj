@@ -21,4 +21,11 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="PDFsharp" Version="6.2.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\sample\**\*.*">
+      <Link>sample\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
