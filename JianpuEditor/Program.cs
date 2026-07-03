@@ -1,6 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using JianpuEditor.Rendering;
@@ -11,17 +9,9 @@ namespace JianpuEditor
 {
     internal static class Program
     {
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool AllocConsole();
-
         [STAThread]
         private static void Main()
         {
-            AllocConsole();
-            Console.OutputEncoding = Encoding.UTF8;
-            Console.WriteLine("JianpuEditor 调试控制台已启用（指令栈日志）");
-
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += OnThreadException;
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;

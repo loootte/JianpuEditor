@@ -43,7 +43,6 @@ namespace JianpuEditor
         private ToolStripMenuItem _darkModeMenuItem;
         private ToolStripMenuItem _undoMenuItem;
         private ToolStripMenuItem _redoMenuItem;
-        private UndoRedoMessageFilter _undoRedoMessageFilter;
         private bool _isExecutingHistoryChange;
 
         public MainForm(
@@ -61,6 +60,7 @@ namespace JianpuEditor
             InitializeComponent();
             SetupLayoutStructure();
 
+            KeyPreview = true;
             KeyDown += OnFormKeyDown;
             Load += OnFormLoad;
             Resize += OnFormResize;
@@ -182,10 +182,6 @@ namespace JianpuEditor
         private void OnFormLoad(object sender, EventArgs e)
         {
             InitializeBindings(_viewModel);
-            _undoRedoMessageFilter = new UndoRedoMessageFilter(
-                () => TryExecuteUndo("MessageFilter"),
-                () => TryExecuteRedo("MessageFilter"));
-            Application.AddMessageFilter(_undoRedoMessageFilter);
             RestoreLayout();
             ApplyDpiScaling();
             ApplyTheme();
@@ -236,10 +232,10 @@ namespace JianpuEditor
             fileMenu.DropDownItems.Add(CreateMenuItem("退出", Keys.None, (s, e) => Close()));
 
             var editMenu = new ToolStripMenuItem("编辑");
-            _undoMenuItem = CreateMenuItem("撤回", Keys.Control | Keys.Z, (s, e) => TryExecuteUndo("Menu"));
+            _undoMenuItem = CreateMenuItem("撤回", Keys.Control | Keys.Z, (s, e) => ExecuteUndo());
             _undoMenuItem.Enabled = false;
             editMenu.DropDownItems.Add(_undoMenuItem);
-            _redoMenuItem = CreateMenuItem("重做", Keys.Control | Keys.Y, (s, e) => TryExecuteRedo("Menu"));
+            _redoMenuItem = CreateMenuItem("重做", Keys.Control | Keys.Y, (s, e) => ExecuteRedo());
             _redoMenuItem.Enabled = false;
             editMenu.DropDownItems.Add(_redoMenuItem);
             editMenu.DropDownItems.Add(CreateMenuItem("新增小节", Keys.None, (s, e) => ExecuteAddMeasure()));
@@ -452,12 +448,20 @@ namespace JianpuEditor
         {
             if (keyData == (Keys.Control | Keys.Z))
             {
-                return TryExecuteUndo("ProcessCmdKey") || base.ProcessCmdKey(ref msg, keyData);
+                if (!ShouldDeferUndoRedoToTextInput())
+                {
+                    ExecuteUndo();
+                    return true;
+                }
             }
 
             if (keyData == (Keys.Control | Keys.Y))
             {
-                return TryExecuteRedo("ProcessCmdKey") || base.ProcessCmdKey(ref msg, keyData);
+                if (!ShouldDeferUndoRedoToTextInput())
+                {
+                    ExecuteRedo();
+                    return true;
+                }
             }
 
             return base.ProcessCmdKey(ref msg, keyData);
@@ -478,17 +482,11 @@ namespace JianpuEditor
             ExecuteScoreEdit(() => _viewModel.ScoreEditor.Delete());
         }
 
-        private bool TryExecuteUndo(string source)
+        private void ExecuteUndo()
         {
-            if (_isExecutingHistoryChange)
+            if (_isExecutingHistoryChange || !_commandHistory.CanUndo)
             {
-                return true;
-            }
-
-            LogUndoRedoAttempt("Undo", source);
-            if (!_commandHistory.CanUndo)
-            {
-                return true;
+                return;
             }
 
             ExecuteHistoryChange(() =>
@@ -496,20 +494,13 @@ namespace JianpuEditor
                 _commandHistory.Undo();
                 _viewModel.SetStatus("已撤回");
             });
-            return true;
         }
 
-        private bool TryExecuteRedo(string source)
+        private void ExecuteRedo()
         {
-            if (_isExecutingHistoryChange)
+            if (_isExecutingHistoryChange || !_commandHistory.CanRedo)
             {
-                return true;
-            }
-
-            LogUndoRedoAttempt("Redo", source);
-            if (!_commandHistory.CanRedo)
-            {
-                return true;
+                return;
             }
 
             ExecuteHistoryChange(() =>
@@ -517,7 +508,6 @@ namespace JianpuEditor
                 _commandHistory.Redo();
                 _viewModel.SetStatus("已重做");
             });
-            return true;
         }
 
         private void ExecuteHistoryChange(Action changeAction)
@@ -533,8 +523,6 @@ namespace JianpuEditor
             }
             catch (Exception ex)
             {
-                var line = "[CommandHistory] HistoryChangeFailed | " + ex.GetType().Name + " | " + ex.Message;
-                Console.WriteLine(line);
                 AppLog.Exception("撤销/重做失败", ex);
                 _viewModel.SetStatus("撤销/重做失败: " + ex.Message);
             }
@@ -544,20 +532,9 @@ namespace JianpuEditor
             }
         }
 
-        private void LogUndoRedoAttempt(string action, string source)
+        private bool ShouldDeferUndoRedoToTextInput()
         {
-            var history = _commandHistory as EditCommandHistory;
-            var instanceId = history?.InstanceId ?? _commandHistory.GetHashCode();
-            var measureCount = _viewModel.Document.Score?.Measures?.Count ?? 0;
-            var canAct = action == "Undo" ? _commandHistory.CanUndo : _commandHistory.CanRedo;
-            var count = action == "Undo" ? _commandHistory.UndoCount : _commandHistory.RedoCount;
-            var line = "[CommandHistory] #" + instanceId + " " + action + "Attempt"
-                + " | source=" + source
-                + " | " + (action == "Undo" ? "CanUndo" : "CanRedo") + "=" + canAct
-                + " | " + (action == "Undo" ? "undo" : "redo") + "(" + count + ")"
-                + " | measures=" + measureCount;
-            Console.WriteLine(line);
-            AppLog.Info(line);
+            return ActiveControl is TextBox;
         }
 
         private ScoreEditResult CreateHistoryRefreshResult()
@@ -576,6 +553,28 @@ namespace JianpuEditor
 
         private void OnFormKeyDown(object sender, KeyEventArgs e)
         {
+            if (e.Control && e.KeyCode == Keys.Z)
+            {
+                if (!ShouldDeferUndoRedoToTextInput())
+                {
+                    ExecuteUndo();
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.Y)
+            {
+                if (!ShouldDeferUndoRedoToTextInput())
+                {
+                    ExecuteRedo();
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
             if (IsTextInputFocused())
             {
                 return;
@@ -985,12 +984,6 @@ namespace JianpuEditor
         private void OnFormClosed(object sender, FormClosedEventArgs e)
         {
             AppLog.Info("简谱编辑器退出");
-            if (_undoRedoMessageFilter != null)
-            {
-                Application.RemoveMessageFilter(_undoRedoMessageFilter);
-                _undoRedoMessageFilter = null;
-            }
-
             _glue?.Dispose();
             _binder?.Dispose();
             _viewModel.Dispose();
