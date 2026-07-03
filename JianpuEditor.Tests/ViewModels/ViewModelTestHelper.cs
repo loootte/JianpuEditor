@@ -27,6 +27,19 @@ namespace JianpuEditor.Tests.ViewModels
             return (document, selection, messenger);
         }
 
+        public static NoteEditorViewModel CreateNoteEditor(
+            ScoreDocumentViewModel document,
+            ScoreSelectionViewModel selection,
+            IAppMessenger messenger,
+            IEditCommandHistory history = null)
+        {
+            return new NoteEditorViewModel(
+                document,
+                selection,
+                messenger,
+                history ?? new EditCommandHistory(messenger));
+        }
+
         public static ChordEditorViewModel CreateChordEditor(
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
@@ -47,7 +60,7 @@ namespace JianpuEditor.Tests.ViewModels
             var messenger = CreateMessenger();
             var document = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), messenger);
             var selection = new ScoreSelectionViewModel(document);
-            var noteEditor = new NoteEditorViewModel(document, selection, messenger);
+            var noteEditor = CreateNoteEditor(document, selection, messenger);
             var tieEditor = new TieEditorViewModel(document, messenger);
             var measureNavigation = new MeasureNavigationViewModel(document, selection, messenger);
             var measureContent = new MeasureContentViewModel(document, measureNavigation, messenger);
@@ -79,7 +92,7 @@ namespace JianpuEditor.Tests.ViewModels
             var messenger = CreateMessenger();
             var document = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), messenger);
             var selection = new ScoreSelectionViewModel(document);
-            var noteEditor = new NoteEditorViewModel(document, selection, messenger);
+            var noteEditor = CreateNoteEditor(document, selection, messenger);
             var tieEditor = new TieEditorViewModel(document, messenger);
             var measureNavigation = new MeasureNavigationViewModel(document, selection, messenger);
             var measureContent = new MeasureContentViewModel(document, measureNavigation, messenger);

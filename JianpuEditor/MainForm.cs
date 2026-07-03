@@ -20,6 +20,7 @@ namespace JianpuEditor
         private readonly IAppMessenger _messenger;
         private readonly ILayoutService _layoutService;
         private readonly IScoreUndoService _undoService;
+        private readonly IEditCommandHistory _commandHistory;
         private ScoreCanvasGlue _glue;
         private MainFormViewBinder _binder;
         private MainFormLayoutContext _layoutContext;
@@ -44,13 +45,16 @@ namespace JianpuEditor
             MainViewModel viewModel,
             IAppMessenger messenger,
             ILayoutService layoutService,
-            IScoreUndoService undoService)
+            IScoreUndoService undoService,
+            IEditCommandHistory commandHistory)
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             _layoutService = layoutService ?? throw new ArgumentNullException(nameof(layoutService));
             _undoService = undoService ?? throw new ArgumentNullException(nameof(undoService));
+            _commandHistory = commandHistory ?? throw new ArgumentNullException(nameof(commandHistory));
             _undoService.StackChanged += (s, e) => UpdateUndoMenuState();
+            _commandHistory.HistoryChanged += (s, e) => UpdateUndoMenuState();
 
             InitializeComponent();
             SetupLayoutStructure();
@@ -272,23 +276,23 @@ namespace JianpuEditor
             for (var pitch = 1; pitch <= 7; pitch++)
             {
                 var p = pitch;
-                panel.Controls.Add(CreateToolButton(p.ToString(), () => ExecuteEdit(() => _viewModel.NoteEditor.AddNote(p))));
+                panel.Controls.Add(CreateToolButton(p.ToString(), () => ExecuteNoteEdit(() => _viewModel.NoteEditor.AddNote(p))));
             }
 
-            panel.Controls.Add(CreateToolButton("0", () => ExecuteEdit(() => _viewModel.NoteEditor.AddRest())));
+            panel.Controls.Add(CreateToolButton("0", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.AddRest())));
             panel.Controls.Add(CreateToolButton("新小节", ExecuteAddMeasure));
             panel.Controls.Add(CreateSeparator());
 
             panel.Controls.Add(new Label { Text = "修饰:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
-            panel.Controls.Add(CreateToolButton("高音·", () => ExecuteEdit(() => _viewModel.NoteEditor.SetOctave(1))));
-            panel.Controls.Add(CreateToolButton("低音·", () => ExecuteEdit(() => _viewModel.NoteEditor.SetOctave(-1))));
-            panel.Controls.Add(CreateToolButton("升key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(1))));
-            panel.Controls.Add(CreateToolButton("降key", () => ExecuteEdit(() => _viewModel.NoteEditor.TransposePitch(-1))));
-            panel.Controls.Add(CreateToolButton("拆分", () => ExecuteEdit(() => _viewModel.NoteEditor.SplitSelectedNotes())));
-            panel.Controls.Add(CreateToolButton("合并", () => ExecuteEdit(() => _viewModel.NoteEditor.MergeSelectedNotes())));
-            panel.Controls.Add(CreateToolButton("附点", () => ExecuteEdit(() => _viewModel.NoteEditor.ToggleDotted())));
-            panel.Controls.Add(CreateToolButton("增时+", () => ExecuteEdit(() => _viewModel.NoteEditor.IncreaseDuration())));
-            panel.Controls.Add(CreateToolButton("减时-", () => ExecuteEdit(() => _viewModel.NoteEditor.DecreaseDuration())));
+            panel.Controls.Add(CreateToolButton("高音·", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.SetOctave(1))));
+            panel.Controls.Add(CreateToolButton("低音·", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.SetOctave(-1))));
+            panel.Controls.Add(CreateToolButton("升key", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.TransposePitch(1))));
+            panel.Controls.Add(CreateToolButton("降key", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.TransposePitch(-1))));
+            panel.Controls.Add(CreateToolButton("拆分", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.SplitSelectedNotes())));
+            panel.Controls.Add(CreateToolButton("合并", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.MergeSelectedNotes())));
+            panel.Controls.Add(CreateToolButton("附点", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.ToggleDotted())));
+            panel.Controls.Add(CreateToolButton("增时+", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.IncreaseDuration())));
+            panel.Controls.Add(CreateToolButton("减时-", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.DecreaseDuration())));
             _tieButton = CreateToolButton("连音线", () => _viewModel.TieEditor.ToggleTieModeCommand.Execute(null));
             panel.Controls.Add(_tieButton);
             panel.Controls.Add(CreateSeparator());
@@ -401,13 +405,25 @@ namespace JianpuEditor
         {
             if (_undoMenuItem != null)
             {
-                _undoMenuItem.Enabled = _undoService.CanUndo;
+                _undoMenuItem.Enabled = _commandHistory.CanUndo || _undoService.CanUndo;
             }
 
             if (_redoMenuItem != null)
             {
-                _redoMenuItem.Enabled = _undoService.CanRedo;
+                _redoMenuItem.Enabled = _commandHistory.CanRedo || _undoService.CanRedo;
             }
+        }
+
+        private void ExecuteNoteEdit(Func<ScoreEditResult> action)
+        {
+            var result = action();
+            if (!result.Changed)
+            {
+                return;
+            }
+
+            _glue.ApplyEditResult(result);
+            _binder.SyncFromViewModels();
         }
 
         private void ExecuteEdit(Func<ScoreEditResult> action)
@@ -468,6 +484,16 @@ namespace JianpuEditor
 
         private void ExecuteUndo()
         {
+            if (_commandHistory.CanUndo)
+            {
+                _commandHistory.Undo();
+                _viewModel.SetStatus("已撤回");
+                _glue.RefreshCanvas();
+                _binder.SyncFromViewModels();
+                UpdateUndoMenuState();
+                return;
+            }
+
             if (!_undoService.CanUndo)
             {
                 return;
@@ -479,6 +505,20 @@ namespace JianpuEditor
 
         private void ExecuteRedo()
         {
+            if (_commandHistory.CanRedo)
+            {
+                _commandHistory.Redo();
+                _viewModel.SetStatus("已重做");
+                _glue.ApplyEditResult(new ScoreEditResult
+                {
+                    Changed = true,
+                    RequiresScoreRefresh = true
+                });
+                _binder.SyncFromViewModels();
+                UpdateUndoMenuState();
+                return;
+            }
+
             if (!_undoService.CanRedo)
             {
                 return;

@@ -10,7 +10,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void SplitSelectedNotes_DividesQuarterIntoTwoEighths()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 4, Underlines = 0 });
             selection.UpdateFrom(new ScoreSelectionInfo
@@ -31,7 +31,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void MergeSelectedNotes_CombinesAdjacentQuartersIntoExtension()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 1, Underlines = 0 });
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 2, Underlines = 0 });
@@ -57,7 +57,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void MergeSelectedNotes_PairsAllSelectedNotesWithinMeasure()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             var measure = document.Score.Measures[0].MelodyNotes;
             measure.Add(new JianpuNote { Pitch = 1, Underlines = 0 });

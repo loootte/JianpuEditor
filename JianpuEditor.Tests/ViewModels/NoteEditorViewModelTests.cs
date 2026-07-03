@@ -10,7 +10,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void AddNote_InsertsAtGapSelection()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             selection.UpdateFrom(new ScoreSelectionInfo
             {
@@ -29,7 +29,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void AddNote_ModifiesSelectedNote()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 1 });
             selection.UpdateFrom(new ScoreSelectionInfo
@@ -47,7 +47,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void AddRest_InsertsRestNote()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, InsertIndex = 0 });
 
@@ -78,7 +78,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void IncreaseDuration_StepsThroughTiersUpToExtension3()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             var note = new JianpuNote { Underlines = 2 };
             document.Score.Measures[0].MelodyNotes.Add(note);
@@ -113,7 +113,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void TransposePitch_RaisesSelectedNoteWithinKey()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             var note = new JianpuNote { Pitch = 5, Octave = 0 };
             document.Score.Measures[0].MelodyNotes.Add(note);
@@ -129,7 +129,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void DecreaseDuration_StepsThroughTiersDownToSixteenth()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var editor = new NoteEditorViewModel(document, selection, messenger);
+            var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger);
             document.EnsureMeasures();
             var note = new JianpuNote { Dashes = 3 };
             document.Score.Measures[0].MelodyNotes.Add(note);
