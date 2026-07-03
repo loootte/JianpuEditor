@@ -9,8 +9,8 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void AddMeasure_IncreasesMeasureCount()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var navigation = new MeasureNavigationViewModel(document, selection, messenger);
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
             document.EnsureMeasures();
 
             navigation.AddMeasure();
@@ -21,8 +21,8 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void DuplicateMeasures_CopiesSelectedRange()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var navigation = new MeasureNavigationViewModel(document, selection, messenger);
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
             document.EnsureMeasures();
             document.Score.Measures.Add(new JianpuMeasure { LyricText = "第二小节" });
             selection.UpdateFrom(new ScoreSelectionInfo
@@ -40,8 +40,8 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void NormalizeMeasureRange_SwapsWhenFromGreaterThanTo()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var navigation = new MeasureNavigationViewModel(document, selection, messenger);
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
 
             var range = navigation.NormalizeMeasureRange(3, 1, fromChanged: true);
 

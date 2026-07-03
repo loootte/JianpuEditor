@@ -9,8 +9,9 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void AddChordMarker_AddsMarkerToCurrentMeasure()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger);
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, navigation, messenger, history: history);
             document.EnsureMeasures();
             selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0 });
 
@@ -23,9 +24,10 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void TransposeChords_UpdatesKeySignature()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
             var transpose = new FakeChordTransposeService();
-            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger, transpose);
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, navigation, messenger, transpose, history);
             document.EnsureMeasures();
             document.KeySignature = "1=C";
             document.Score.Measures[0].ChordMarkers.Add(new ChordMarker { Text = "C", BeatPosition = 0 });
@@ -39,9 +41,10 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void TransposeChords_ReturnsErrorWhenServiceFails()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
             var transpose = new FakeChordTransposeService { ShouldSucceed = false, ErrorMessage = "无效调号" };
-            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger, transpose);
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, navigation, messenger, transpose, history);
             document.EnsureMeasures();
             document.KeySignature = "1=C";
 

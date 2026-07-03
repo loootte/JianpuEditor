@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -6,6 +7,7 @@ using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
 using JianpuEditor.Services;
+using JianpuEditor.Services.EditCommands;
 
 namespace JianpuEditor.ViewModels
 {
@@ -13,14 +15,19 @@ namespace JianpuEditor.ViewModels
     {
         private readonly IScoreFileService _fileService;
         private readonly IAppMessenger _messenger;
+        private readonly IEditCommandHistory _history;
         private JianpuScore _score = new JianpuScore();
         private string _currentFilePath;
         private bool _isDirty;
 
-        public ScoreDocumentViewModel(IScoreFileService fileService, IAppMessenger messenger)
+        public ScoreDocumentViewModel(
+            IScoreFileService fileService,
+            IAppMessenger messenger,
+            IEditCommandHistory history)
         {
             _fileService = fileService ?? new ScoreFileServiceAdapter();
-            _messenger = messenger;
+            _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+            _history = history ?? throw new ArgumentNullException(nameof(history));
         }
 
         public JianpuScore Score
@@ -244,6 +251,63 @@ namespace JianpuEditor.ViewModels
         public void MarkClean()
         {
             IsDirty = false;
+        }
+
+        public void ApplyHeaderFieldEdit(ScoreHeaderField field, string text)
+        {
+            if (field == ScoreHeaderField.None)
+            {
+                return;
+            }
+
+            var oldStringValue = GetHeaderStringValue(field);
+            var oldBpm = Bpm;
+            var newStringValue = text ?? string.Empty;
+            var newBpm = oldBpm;
+
+            if (field == ScoreHeaderField.Bpm)
+            {
+                if (!int.TryParse(text?.Trim(), out var parsedBpm))
+                {
+                    return;
+                }
+
+                newBpm = Math.Max(30, Math.Min(300, parsedBpm));
+                if (newBpm == oldBpm)
+                {
+                    return;
+                }
+            }
+            else if (string.Equals(oldStringValue, newStringValue, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _history.Execute(new ModifyHeaderFieldCommand(
+                this,
+                _messenger,
+                field,
+                oldStringValue,
+                newStringValue,
+                oldBpm,
+                newBpm));
+        }
+
+        private string GetHeaderStringValue(ScoreHeaderField field)
+        {
+            switch (field)
+            {
+                case ScoreHeaderField.Title:
+                    return Title;
+                case ScoreHeaderField.KeySignature:
+                    return KeySignature;
+                case ScoreHeaderField.Tempo:
+                    return Tempo;
+                case ScoreHeaderField.Composer:
+                    return Composer;
+                default:
+                    return string.Empty;
+            }
         }
     }
 }

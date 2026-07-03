@@ -11,7 +11,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void RefreshSamples_UsesInjectedService()
         {
             var messenger = ViewModelTestHelper.CreateMessenger();
-            var document = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), messenger);
+            var document = ViewModelTestHelper.CreateDocument(messenger);
             var samples = new FakeSampleLibraryService();
             var viewModel = new SampleLibraryViewModel(document, samples, messenger);
 
@@ -25,7 +25,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void GetDisplayName_DelegatesToService()
         {
             var messenger = ViewModelTestHelper.CreateMessenger();
-            var document = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), messenger);
+            var document = ViewModelTestHelper.CreateDocument(messenger);
             var samples = new FakeSampleLibraryService();
             var viewModel = new SampleLibraryViewModel(document, samples, messenger);
 

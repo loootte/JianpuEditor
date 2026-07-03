@@ -2,24 +2,34 @@ using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
+using JianpuEditor.Services.EditCommands;
 
 namespace JianpuEditor.ViewModels
 {
     public sealed class TieEditorViewModel : ObservableObject
     {
         private readonly ScoreDocumentViewModel _document;
+        private readonly MeasureNavigationViewModel _navigation;
         private readonly IAppMessenger _messenger;
+        private readonly IEditCommandHistory _history;
         private bool _isTieModeActive;
         private int _tieStartMeasureIndex = -1;
         private int _tieStartNoteIndex = -1;
 
-        public TieEditorViewModel(ScoreDocumentViewModel document, IAppMessenger messenger)
+        public TieEditorViewModel(
+            ScoreDocumentViewModel document,
+            MeasureNavigationViewModel navigation,
+            IAppMessenger messenger,
+            IEditCommandHistory history)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
+            _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+            _history = history ?? throw new ArgumentNullException(nameof(history));
             ToggleTieModeCommand = new RelayCommand(ToggleTieMode);
             CancelTieModeCommand = new RelayCommand(CancelTieMode);
         }
@@ -85,6 +95,24 @@ namespace JianpuEditor.ViewModels
                 return ScoreEditResult.Unchanged;
             }
 
+            var startMeasureIndex = _tieStartMeasureIndex;
+            var startNoteIndex = _tieStartNoteIndex;
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(
+                    _document,
+                    _navigation,
+                    _messenger,
+                    () => ApplyAddTie(startMeasureIndex, startNoteIndex, endMeasureIndex, endNoteIndex),
+                    "添加连音线"));
+        }
+
+        private ScoreEditResult ApplyAddTie(
+            int startMeasureIndex,
+            int startNoteIndex,
+            int endMeasureIndex,
+            int endNoteIndex)
+        {
             if (_document.Score.Ties == null)
             {
                 _document.Score.Ties = new List<JianpuTie>();
@@ -92,14 +120,13 @@ namespace JianpuEditor.ViewModels
 
             _document.Score.Ties.Add(new JianpuTie
             {
-                StartMeasureIndex = _tieStartMeasureIndex,
-                StartNoteIndex = _tieStartNoteIndex,
+                StartMeasureIndex = startMeasureIndex,
+                StartNoteIndex = startNoteIndex,
                 EndMeasureIndex = endMeasureIndex,
                 EndNoteIndex = endNoteIndex
             });
 
             CancelTieMode();
-            _messenger.Send(new ScoreEditedMessage("已添加连音线"));
             return ScoreEditResult.WithMessage("已添加连音线");
         }
 
