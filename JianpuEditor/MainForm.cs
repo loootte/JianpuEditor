@@ -38,6 +38,7 @@ namespace JianpuEditor
         private ContextMenuStrip _sampleLibraryMenu;
         private ToolStripMenuItem _darkModeMenuItem;
         private ToolStripMenuItem _undoMenuItem;
+        private ToolStripMenuItem _redoMenuItem;
 
         public MainForm(
             MainViewModel viewModel,
@@ -227,6 +228,9 @@ namespace JianpuEditor
             _undoMenuItem = CreateMenuItem("撤回", Keys.Control | Keys.Z, (s, e) => ExecuteUndo());
             _undoMenuItem.Enabled = false;
             editMenu.DropDownItems.Add(_undoMenuItem);
+            _redoMenuItem = CreateMenuItem("重做", Keys.Control | Keys.Y, (s, e) => ExecuteRedo());
+            _redoMenuItem.Enabled = false;
+            editMenu.DropDownItems.Add(_redoMenuItem);
             editMenu.DropDownItems.Add(CreateMenuItem("新增小节", Keys.None, (s, e) => ExecuteAddMeasure()));
             editMenu.DropDownItems.Add(CreateMenuItem("复制小节", Keys.None, (s, e) => ExecuteDuplicateMeasures()));
             editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
@@ -399,6 +403,11 @@ namespace JianpuEditor
             {
                 _undoMenuItem.Enabled = _undoService.CanUndo;
             }
+
+            if (_redoMenuItem != null)
+            {
+                _redoMenuItem.Enabled = _undoService.CanRedo;
+            }
         }
 
         private void ExecuteEdit(Func<ScoreEditResult> action)
@@ -464,7 +473,23 @@ namespace JianpuEditor
                 return;
             }
 
-            var snapshot = _undoService.PopSnapshot();
+            var snapshot = _undoService.PopSnapshotForUndo(_viewModel.Document.Score);
+            RestoreScoreSnapshot(snapshot, "已撤回");
+        }
+
+        private void ExecuteRedo()
+        {
+            if (!_undoService.CanRedo)
+            {
+                return;
+            }
+
+            var snapshot = _undoService.PopSnapshotForRedo(_viewModel.Document.Score);
+            RestoreScoreSnapshot(snapshot, "已重做");
+        }
+
+        private void RestoreScoreSnapshot(JianpuScore snapshot, string statusMessage)
+        {
             if (snapshot == null)
             {
                 UpdateUndoMenuState();
@@ -503,7 +528,7 @@ namespace JianpuEditor
                 _glue.ResetPlaybackHead();
                 _binder.SyncHeaderFromDocument();
                 _binder.SyncFromViewModels();
-                _viewModel.SetStatus("已撤回");
+                _viewModel.SetStatus(statusMessage);
             }
             finally
             {
@@ -529,6 +554,13 @@ namespace JianpuEditor
             if (e.Control && e.KeyCode == Keys.Z)
             {
                 ExecuteUndo();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.Y)
+            {
+                ExecuteRedo();
                 e.Handled = true;
                 return;
             }

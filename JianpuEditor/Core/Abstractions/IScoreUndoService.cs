@@ -9,6 +9,8 @@ namespace JianpuEditor.Core.Abstractions
 
         bool CanUndo { get; }
 
+        bool CanRedo { get; }
+
         bool IsRestoring { get; }
 
         void RecordSnapshot(JianpuScore score);
@@ -16,6 +18,10 @@ namespace JianpuEditor.Core.Abstractions
         void DiscardLastSnapshot();
 
         JianpuScore PopSnapshot();
+
+        JianpuScore PopSnapshotForUndo(JianpuScore currentScore);
+
+        JianpuScore PopSnapshotForRedo(JianpuScore currentScore);
 
         void Clear();
 
