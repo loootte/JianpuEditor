@@ -41,6 +41,7 @@ namespace JianpuEditor
         private MenuStrip _menuStrip;
         private ContextMenuStrip _sampleLibraryMenu;
         private ToolStripMenuItem _darkModeMenuItem;
+        private ToolStripMenuItem _fillPlaceholdersMenuItem;
         private ToolStripMenuItem _undoMenuItem;
         private ToolStripMenuItem _redoMenuItem;
         private bool _isExecutingHistoryChange;
@@ -239,6 +240,10 @@ namespace JianpuEditor
             _redoMenuItem.Enabled = false;
             editMenu.DropDownItems.Add(_redoMenuItem);
             editMenu.DropDownItems.Add(CreateMenuItem("新增小节", Keys.None, (s, e) => ExecuteAddMeasure()));
+            editMenu.DropDownItems.Add(CreateMenuItem(
+                "新增小节（含占位符）",
+                Keys.Control | Keys.Shift | Keys.N,
+                (s, e) => ExecuteAddMeasureWithPlaceholders()));
             editMenu.DropDownItems.Add(CreateMenuItem("复制小节", Keys.None, (s, e) => ExecuteDuplicateMeasures()));
             editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
             editMenu.DropDownItems.Add(CreateMenuItem("清空谱面", Keys.None, OnClearScore));
@@ -251,6 +256,13 @@ namespace JianpuEditor
             };
             _darkModeMenuItem.CheckedChanged += OnDarkModeToggled;
             viewMenu.DropDownItems.Add(_darkModeMenuItem);
+            _fillPlaceholdersMenuItem = new ToolStripMenuItem("新增小节默认填充占位符")
+            {
+                CheckOnClick = true,
+                Checked = AppTheme.FillMeasurePlaceholdersOnAdd
+            };
+            _fillPlaceholdersMenuItem.CheckedChanged += OnFillPlaceholdersToggled;
+            viewMenu.DropDownItems.Add(_fillPlaceholdersMenuItem);
             viewMenu.DropDownItems.Add(new ToolStripSeparator());
             viewMenu.DropDownItems.Add(CreateMenuItem("重置布局", Keys.None, (s, e) => RestoreLayout()));
 
@@ -376,6 +388,11 @@ namespace JianpuEditor
             ApplyTheme();
         }
 
+        private void OnFillPlaceholdersToggled(object sender, EventArgs e)
+        {
+            AppTheme.SetFillMeasurePlaceholdersOnAdd(_fillPlaceholdersMenuItem.Checked);
+        }
+
         private static ToolStripMenuItem CreateMenuItem(string text, Keys shortcut, EventHandler handler)
         {
             var item = new ToolStripMenuItem(text, null, handler);
@@ -464,12 +481,23 @@ namespace JianpuEditor
                 }
             }
 
+            if (keyData == (Keys.Control | Keys.Shift | Keys.N))
+            {
+                ExecuteAddMeasureWithPlaceholders();
+                return true;
+            }
+
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private void ExecuteAddMeasure()
         {
             ExecuteScoreEdit(() => _viewModel.MeasureNavigation.AddMeasure());
+        }
+
+        private void ExecuteAddMeasureWithPlaceholders()
+        {
+            ExecuteScoreEdit(() => _viewModel.MeasureNavigation.AddMeasureWithPlaceholders());
         }
 
         private void ExecuteDuplicateMeasures()
@@ -572,6 +600,13 @@ namespace JianpuEditor
                     e.Handled = true;
                 }
 
+                return;
+            }
+
+            if (e.Control && e.Shift && e.KeyCode == Keys.N)
+            {
+                ExecuteAddMeasureWithPlaceholders();
+                e.Handled = true;
                 return;
             }
 

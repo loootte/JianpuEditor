@@ -14,6 +14,8 @@ namespace JianpuEditor.Rendering
 
         public static bool IsDarkMode { get; private set; }
 
+        public static bool FillMeasurePlaceholdersOnAdd { get; private set; } = true;
+
         public static event Action ThemeChanged;
 
         public static void Load()
@@ -28,10 +30,12 @@ namespace JianpuEditor.Rendering
                 var json = File.ReadAllText(SettingsPath);
                 var settings = JsonConvert.DeserializeObject<ThemeSettings>(json);
                 IsDarkMode = settings?.DarkMode ?? false;
+                FillMeasurePlaceholdersOnAdd = settings?.FillMeasurePlaceholdersOnAdd ?? true;
             }
             catch
             {
                 IsDarkMode = false;
+                FillMeasurePlaceholdersOnAdd = true;
             }
         }
 
@@ -49,6 +53,20 @@ namespace JianpuEditor.Rendering
             }
 
             ThemeChanged?.Invoke();
+        }
+
+        public static void SetFillMeasurePlaceholdersOnAdd(bool enabled, bool persist = true)
+        {
+            if (FillMeasurePlaceholdersOnAdd == enabled)
+            {
+                return;
+            }
+
+            FillMeasurePlaceholdersOnAdd = enabled;
+            if (persist)
+            {
+                Save();
+            }
         }
 
         public static Color FormBackground
@@ -151,7 +169,13 @@ namespace JianpuEditor.Rendering
                     Directory.CreateDirectory(directory);
                 }
 
-                var json = JsonConvert.SerializeObject(new ThemeSettings { DarkMode = IsDarkMode }, Formatting.Indented);
+                var json = JsonConvert.SerializeObject(
+                    new ThemeSettings
+                    {
+                        DarkMode = IsDarkMode,
+                        FillMeasurePlaceholdersOnAdd = FillMeasurePlaceholdersOnAdd
+                    },
+                    Formatting.Indented);
                 File.WriteAllText(SettingsPath, json);
             }
             catch
@@ -163,6 +187,8 @@ namespace JianpuEditor.Rendering
         private sealed class ThemeSettings
         {
             public bool DarkMode { get; set; }
+
+            public bool FillMeasurePlaceholdersOnAdd { get; set; } = true;
         }
     }
 }
