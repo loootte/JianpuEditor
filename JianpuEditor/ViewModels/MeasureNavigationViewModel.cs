@@ -7,6 +7,7 @@ using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
+using JianpuEditor.Rendering;
 using JianpuEditor.Services;
 using JianpuEditor.Services.EditCommands;
 
@@ -74,7 +75,19 @@ namespace JianpuEditor.ViewModels
         {
             return EditCommandHelper.Execute(
                 _history,
-                new ScoreSnapshotEditCommand(_document, this, _messenger, ApplyAddMeasure, "新增小节"));
+                new ScoreSnapshotEditCommand(_document, this, _messenger, () => ApplyAddMeasure(), "新增小节"));
+        }
+
+        public ScoreEditResult AddMeasureWithPlaceholders()
+        {
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(
+                    _document,
+                    this,
+                    _messenger,
+                    () => ApplyAddMeasure(forcePlaceholders: true),
+                    "新增小节（含占位符）"));
         }
 
         public ScoreEditResult DuplicateMeasures()
@@ -136,11 +149,15 @@ namespace JianpuEditor.ViewModels
             CurrentMeasureIndex = index;
         }
 
-        private ScoreEditResult ApplyAddMeasure()
+        private ScoreEditResult ApplyAddMeasure(bool forcePlaceholders = false)
         {
             _document.EnsureMeasures();
             var score = ScoreCloneService.Clone(_document.Score);
-            score.Measures.Add(new JianpuMeasure());
+            var fillPlaceholders = forcePlaceholders || AppTheme.FillMeasurePlaceholdersOnAdd;
+            var newMeasure = fillPlaceholders
+                ? MeasurePlaceholderService.CreateMeasureWithPlaceholders()
+                : new JianpuMeasure();
+            score.Measures.Add(newMeasure);
             var newIndex = score.Measures.Count - 1;
             _document.Score = score;
             CurrentMeasureIndex = newIndex;
@@ -151,6 +168,8 @@ namespace JianpuEditor.ViewModels
                 Changed = true,
                 Message = message,
                 SelectMeasureIndex = newIndex,
+                SelectNoteMeasureIndex = fillPlaceholders ? newIndex : null,
+                SelectNoteIndex = fillPlaceholders ? 0 : null,
                 RequiresScoreRefresh = true
             };
         }
