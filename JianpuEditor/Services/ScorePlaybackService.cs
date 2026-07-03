@@ -2,11 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows.Forms;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Models;
 
 namespace JianpuEditor.Services
 {
-    public sealed class ScorePlaybackService : IDisposable
+    public sealed class ScorePlaybackService : IScorePlaybackService
     {
         private const int MinBpm = 30;
         private const int MaxBpm = 300;

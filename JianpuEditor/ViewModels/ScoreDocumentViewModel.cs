@@ -1,5 +1,9 @@
+using System.Collections.Generic;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using JianpuEditor.Core.Abstractions;
+using JianpuEditor.Core.Messaging;
+using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
 using JianpuEditor.Services;
 
@@ -8,13 +12,15 @@ namespace JianpuEditor.ViewModels
     public sealed class ScoreDocumentViewModel : ObservableObject
     {
         private readonly IScoreFileService _fileService;
+        private readonly IAppMessenger _messenger;
         private JianpuScore _score = new JianpuScore();
         private string _currentFilePath;
         private bool _isDirty;
 
-        public ScoreDocumentViewModel(IScoreFileService fileService)
+        public ScoreDocumentViewModel(IScoreFileService fileService, IAppMessenger messenger)
         {
             _fileService = fileService ?? new ScoreFileServiceAdapter();
+            _messenger = messenger;
         }
 
         public JianpuScore Score
@@ -28,6 +34,7 @@ namespace JianpuEditor.ViewModels
                 }
 
                 _score = value ?? new JianpuScore();
+                EnsureMeasures();
                 ChordMarkerService.NormalizeScore(_score);
                 OnPropertyChanged(nameof(Score));
                 OnPropertyChanged(nameof(Title));
@@ -35,6 +42,7 @@ namespace JianpuEditor.ViewModels
                 OnPropertyChanged(nameof(Tempo));
                 OnPropertyChanged(nameof(Bpm));
                 OnPropertyChanged(nameof(Composer));
+                OnPropertyChanged(nameof(WindowTitle));
                 MarkDirty();
             }
         }
@@ -51,6 +59,7 @@ namespace JianpuEditor.ViewModels
 
                 _score.Title = value ?? string.Empty;
                 OnPropertyChanged(nameof(Title));
+                OnPropertyChanged(nameof(WindowTitle));
                 MarkDirty();
             }
         }
@@ -122,7 +131,26 @@ namespace JianpuEditor.ViewModels
         public string CurrentFilePath
         {
             get { return _currentFilePath; }
-            private set { SetProperty(ref _currentFilePath, value); }
+            private set
+            {
+                if (SetProperty(ref _currentFilePath, value))
+                {
+                    OnPropertyChanged(nameof(WindowTitle));
+                }
+            }
+        }
+
+        public string WindowTitle
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(_currentFilePath))
+                {
+                    return "简谱编辑器 - " + Path.GetFileName(_currentFilePath);
+                }
+
+                return "简谱编辑器";
+            }
         }
 
         public bool IsDirty
@@ -131,11 +159,20 @@ namespace JianpuEditor.ViewModels
             private set { SetProperty(ref _isDirty, value); }
         }
 
+        public void EnsureMeasures()
+        {
+            if (_score.Measures == null || _score.Measures.Count == 0)
+            {
+                _score.Measures = new List<JianpuMeasure> { new JianpuMeasure() };
+            }
+        }
+
         public void LoadFromFile(string path)
         {
             Score = _fileService.Load(path);
             CurrentFilePath = path;
             IsDirty = false;
+            _messenger?.Send(new ScoreLoadedMessage(_score, path));
         }
 
         public void SaveToFile(string path)
@@ -147,14 +184,66 @@ namespace JianpuEditor.ViewModels
 
         public void ResetAsNew()
         {
-            Score = new JianpuScore();
+            _score = new JianpuScore();
+            EnsureMeasures();
+            ChordMarkerService.NormalizeScore(_score);
             CurrentFilePath = null;
             IsDirty = false;
+            OnPropertyChanged(nameof(Score));
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(KeySignature));
+            OnPropertyChanged(nameof(Tempo));
+            OnPropertyChanged(nameof(Bpm));
+            OnPropertyChanged(nameof(Composer));
+            OnPropertyChanged(nameof(WindowTitle));
+            _messenger?.Send(new ScoreLoadedMessage(_score, null));
+        }
+
+        public void LoadDemoScore()
+        {
+            _score = DemoScoreFactory.CreateOdeToJoy();
+            CurrentFilePath = null;
+            IsDirty = false;
+            OnPropertyChanged(nameof(Score));
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(KeySignature));
+            OnPropertyChanged(nameof(Tempo));
+            OnPropertyChanged(nameof(Bpm));
+            OnPropertyChanged(nameof(Composer));
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+
+        public void LoadSample(string path)
+        {
+            _score = _fileService.Load(path);
+            ChordMarkerService.NormalizeScore(_score);
+            CurrentFilePath = null;
+            IsDirty = false;
+            OnPropertyChanged(nameof(Score));
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(KeySignature));
+            OnPropertyChanged(nameof(Tempo));
+            OnPropertyChanged(nameof(Bpm));
+            OnPropertyChanged(nameof(Composer));
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+
+        public void ClearMeasures()
+        {
+            EnsureMeasures();
+            _score.Measures = new List<JianpuMeasure> { new JianpuMeasure() };
+            MarkDirty();
+            OnPropertyChanged(nameof(Score));
         }
 
         public void MarkDirty()
         {
             IsDirty = true;
+        }
+
+        public void MarkClean()
+        {
+            IsDirty = false;
         }
     }
 }

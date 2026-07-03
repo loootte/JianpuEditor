@@ -15,8 +15,18 @@ namespace JianpuEditor
 
             services.AddSingleton<IAppMessenger, AppMessenger>();
             services.AddSingleton<IScoreFileService, ScoreFileServiceAdapter>();
-            services.AddTransient<ScoreDocumentViewModel>();
-            services.AddTransient<MainViewModel>();
+            services.AddSingleton<IScorePlaybackService, ScorePlaybackService>();
+            services.AddSingleton<ScoreDocumentViewModel>();
+            services.AddSingleton<ScoreSelectionViewModel>();
+            services.AddSingleton<NoteEditorViewModel>();
+            services.AddSingleton<TieEditorViewModel>();
+            services.AddSingleton<MeasureNavigationViewModel>();
+            services.AddSingleton<MeasureContentViewModel>();
+            services.AddSingleton<ChordEditorViewModel>();
+            services.AddSingleton<ScoreEditorViewModel>();
+            services.AddSingleton<PlaybackViewModel>();
+            services.AddSingleton<SampleLibraryViewModel>();
+            services.AddSingleton<MainViewModel>();
             services.AddTransient<MainForm>();
 
             return services.BuildServiceProvider();
