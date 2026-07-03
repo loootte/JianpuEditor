@@ -9,8 +9,12 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void TryCompleteTie_AddsTieWhenStartAndEndAreValid()
         {
-            var document = ViewModelTestHelper.CreateDocument();
-            var tieEditor = new TieEditorViewModel(document, new Core.Messaging.AppMessenger());
+            var messenger = ViewModelTestHelper.CreateMessenger();
+            var history = ViewModelTestHelper.CreateHistory(messenger);
+            var document = ViewModelTestHelper.CreateDocument(messenger, history);
+            var selection = new ScoreSelectionViewModel(document);
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var tieEditor = ViewModelTestHelper.CreateTieEditor(document, navigation, messenger, history);
             document.EnsureMeasures();
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 1 });
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 2 });
@@ -27,8 +31,12 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void CancelTieMode_DeactivatesMode()
         {
-            var document = ViewModelTestHelper.CreateDocument();
-            var tieEditor = new TieEditorViewModel(document, new Core.Messaging.AppMessenger());
+            var messenger = ViewModelTestHelper.CreateMessenger();
+            var history = ViewModelTestHelper.CreateHistory(messenger);
+            var document = ViewModelTestHelper.CreateDocument(messenger, history);
+            var selection = new ScoreSelectionViewModel(document);
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var tieEditor = ViewModelTestHelper.CreateTieEditor(document, navigation, messenger, history);
 
             tieEditor.ToggleTieMode();
             tieEditor.CancelTieMode();

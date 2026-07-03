@@ -10,7 +10,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void AddNote_Undo_RestoresEmptyMeasure()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, _) = ViewModelTestHelper.CreateDocumentWithSelection();
             var history = new EditCommandHistory(messenger);
             var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history);
             document.EnsureMeasures();
@@ -27,7 +27,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void AddNote_Redo_ReappliesInsert()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, _) = ViewModelTestHelper.CreateDocumentWithSelection();
             var history = new EditCommandHistory(messenger);
             var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history);
             document.EnsureMeasures();
@@ -44,7 +44,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void ModifySelectedNote_Undo_RestoresOriginalPitch()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, _) = ViewModelTestHelper.CreateDocumentWithSelection();
             var history = new EditCommandHistory(messenger);
             var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history);
             document.EnsureMeasures();
@@ -62,7 +62,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void SplitSelectedNotes_Undo_RestoresSingleNote()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, _) = ViewModelTestHelper.CreateDocumentWithSelection();
             var history = new EditCommandHistory(messenger);
             var editor = ViewModelTestHelper.CreateNoteEditor(document, selection, messenger, history);
             document.EnsureMeasures();

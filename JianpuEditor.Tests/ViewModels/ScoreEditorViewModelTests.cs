@@ -9,16 +9,16 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void Delete_RemovesSelectedTieFirst()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
             document.EnsureMeasures();
             document.Score.Ties = new System.Collections.Generic.List<JianpuTie>
             {
                 new JianpuTie { StartMeasureIndex = 0, StartNoteIndex = 0, EndMeasureIndex = 0, EndNoteIndex = 1 }
             };
             selection.UpdateFrom(new ScoreSelectionInfo { TieIndex = 0 });
-            var navigation = new MeasureNavigationViewModel(document, selection, messenger);
-            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger);
-            var editor = new ScoreEditorViewModel(document, selection, navigation, chordEditor, messenger);
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, navigation, messenger, history: history);
+            var editor = ViewModelTestHelper.CreateScoreEditor(document, selection, navigation, chordEditor, messenger, history);
 
             var result = editor.Delete();
 
@@ -29,13 +29,13 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void Delete_RemovesSelectedNote()
         {
-            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
             document.EnsureMeasures();
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 3 });
             selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
-            var navigation = new MeasureNavigationViewModel(document, selection, messenger);
-            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger);
-            var editor = new ScoreEditorViewModel(document, selection, navigation, chordEditor, messenger);
+            var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, navigation, messenger, history: history);
+            var editor = ViewModelTestHelper.CreateScoreEditor(document, selection, navigation, chordEditor, messenger, history);
 
             var result = editor.Delete();
 

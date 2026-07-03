@@ -1,7 +1,9 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
+using JianpuEditor.Services.EditCommands;
 
 namespace JianpuEditor.ViewModels
 {
@@ -10,17 +12,20 @@ namespace JianpuEditor.ViewModels
         private readonly ScoreDocumentViewModel _document;
         private readonly MeasureNavigationViewModel _navigation;
         private readonly IAppMessenger _messenger;
+        private readonly IEditCommandHistory _history;
         private string _currentLyricText = string.Empty;
         private bool _suppressSync;
 
         public MeasureContentViewModel(
             ScoreDocumentViewModel document,
             MeasureNavigationViewModel navigation,
-            IAppMessenger messenger)
+            IAppMessenger messenger,
+            IEditCommandHistory history)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
             _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+            _history = history ?? throw new ArgumentNullException(nameof(history));
         }
 
         public string CurrentLyricText
@@ -61,14 +66,24 @@ namespace JianpuEditor.ViewModels
                 return;
             }
 
-            _document.Score.Measures[measureIndex].LyricText = text ?? string.Empty;
-            _messenger.Send(new ScoreEditedMessage("已更新歌词", markDirty: true));
+            var newText = text ?? string.Empty;
+            var currentText = _document.Score.Measures[measureIndex].LyricText ?? string.Empty;
+            if (string.Equals(currentText, newText, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _history.Execute(new ModifyLyricTextCommand(
+                _document.Score,
+                _messenger,
+                measureIndex,
+                currentText,
+                newText));
         }
 
         public ScoreEditResult NotifyInlineLyricEdited(int measureIndex)
         {
             LoadFromMeasure(measureIndex);
-            _messenger.Send(new ScoreEditedMessage("已更新小节文字"));
             return ScoreEditResult.WithMessage("已更新小节文字");
         }
     }

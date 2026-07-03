@@ -22,5 +22,23 @@ namespace JianpuEditor.Services
             ChordMarkerService.NormalizeScore(clone);
             return clone;
         }
+
+        public static bool AreEquivalent(JianpuScore left, JianpuScore right)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return true;
+            }
+
+            if (left == null || right == null)
+            {
+                return false;
+            }
+
+            return string.Equals(
+                JsonConvert.SerializeObject(left),
+                JsonConvert.SerializeObject(right),
+                System.StringComparison.Ordinal);
+        }
     }
 }

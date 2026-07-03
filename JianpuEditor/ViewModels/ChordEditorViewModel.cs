@@ -6,6 +6,7 @@ using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
 using JianpuEditor.Services;
+using JianpuEditor.Services.EditCommands;
 
 namespace JianpuEditor.ViewModels
 {
@@ -13,8 +14,9 @@ namespace JianpuEditor.ViewModels
     {
         private readonly ScoreDocumentViewModel _document;
         private readonly ScoreSelectionViewModel _selection;
+        private readonly MeasureNavigationViewModel _navigation;
         private readonly IChordTransposeService _chordTransposeService;
-        private readonly IScoreUndoService _undoService;
+        private readonly IEditCommandHistory _history;
         private readonly IAppMessenger _messenger;
         private string _selectedChordText = string.Empty;
         private bool _isChordEditorEnabled;
@@ -23,14 +25,16 @@ namespace JianpuEditor.ViewModels
         public ChordEditorViewModel(
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
+            MeasureNavigationViewModel navigation,
             IChordTransposeService chordTransposeService,
-            IScoreUndoService undoService,
+            IEditCommandHistory history,
             IAppMessenger messenger)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
             _selection = selection ?? throw new ArgumentNullException(nameof(selection));
+            _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
             _chordTransposeService = chordTransposeService ?? throw new ArgumentNullException(nameof(chordTransposeService));
-            _undoService = undoService ?? throw new ArgumentNullException(nameof(undoService));
+            _history = history ?? throw new ArgumentNullException(nameof(history));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             AddChordMarkerCommand = new RelayCommand(() => AddChordMarker());
             TransposeChordsCommand = new RelayCommand<string>(
@@ -97,49 +101,33 @@ namespace JianpuEditor.ViewModels
             _document.EnsureMeasures();
             var measureIndex = Math.Max(0, _selection.MeasureIndex);
             var measure = _document.Score.Measures[measureIndex];
-            if (!ChordMarkerService.TryAddMarker(measure, 0))
+            if (measure.ChordMarkers.Count >= JianpuMeasure.MaxChordMarkers)
             {
                 var status = "当前小节最多 " + JianpuMeasure.MaxChordMarkers + " 个和弦标识";
                 _messenger.Send(new StatusChangedMessage(status));
                 return ScoreEditResult.Unchanged;
             }
 
-            var markerIndex = measure.ChordMarkers.Count - 1;
-            _messenger.Send(new ScoreEditedMessage("已添加和弦标识"));
-            return new ScoreEditResult
-            {
-                Changed = true,
-                Message = "已添加和弦标识",
-                SelectMeasureIndex = measureIndex,
-                SelectChordMeasureIndex = measureIndex,
-                SelectChordMarkerIndex = markerIndex
-            };
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(
+                    _document,
+                    _navigation,
+                    _messenger,
+                    () => ApplyAddChordMarker(measureIndex, 0),
+                    "添加和弦标识"));
         }
 
         public ScoreEditResult AddChordMarkerAtBeat(int measureIndex, double beatPosition)
         {
-            _document.EnsureMeasures();
-            if (measureIndex < 0 || measureIndex >= _document.Score.Measures.Count)
-            {
-                return ScoreEditResult.Unchanged;
-            }
-
-            var measure = _document.Score.Measures[measureIndex];
-            if (!ChordMarkerService.TryAddMarker(measure, beatPosition))
-            {
-                return ScoreEditResult.Unchanged;
-            }
-
-            var markerIndex = measure.ChordMarkers.Count - 1;
-            _messenger.Send(new ScoreEditedMessage("已添加和弦标识"));
-            return new ScoreEditResult
-            {
-                Changed = true,
-                Message = "已添加和弦标识",
-                SelectMeasureIndex = measureIndex,
-                SelectChordMeasureIndex = measureIndex,
-                SelectChordMarkerIndex = markerIndex
-            };
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(
+                    _document,
+                    _navigation,
+                    _messenger,
+                    () => ApplyAddChordMarker(measureIndex, beatPosition),
+                    "添加和弦标识"));
         }
 
         public void ApplyChordText(string text)
@@ -169,12 +157,16 @@ namespace JianpuEditor.ViewModels
                 return;
             }
 
-            _undoService.RecordSnapshot(_document.Score);
-            measure.ChordMarkers[markerIndex].Text = newText;
-            _messenger.Send(new ScoreEditedMessage("已更新和弦标识", stopPlayback: false));
+            _history.Execute(new ModifyChordMarkerTextCommand(
+                _document.Score,
+                _messenger,
+                measureIndex,
+                markerIndex,
+                currentText,
+                newText));
         }
 
-        public ScoreEditResult RemoveSelectedChord()
+        public ScoreEditResult TryRemoveSelectedChord()
         {
             if (!_selection.HasChordSelected)
             {
@@ -189,7 +181,6 @@ namespace JianpuEditor.ViewModels
                 return ScoreEditResult.Unchanged;
             }
 
-            _messenger.Send(new ScoreEditedMessage("已删除和弦标识"));
             return new ScoreEditResult
             {
                 Changed = true,
@@ -205,9 +196,71 @@ namespace JianpuEditor.ViewModels
                 return ScoreEditResult.Unchanged;
             }
 
+            var trimmedTarget = targetKey.Trim();
+            if (!_chordTransposeService.TryTransposeChords(
+                    ScoreCloneService.Clone(_document.Score),
+                    trimmedTarget,
+                    out var errorMessage,
+                    out _))
+            {
+                return new ScoreEditResult
+                {
+                    Changed = false,
+                    Message = errorMessage
+                };
+            }
+
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(
+                    _document,
+                    _navigation,
+                    _messenger,
+                    () => ApplyTransposeChords(trimmedTarget),
+                    "和弦转调"));
+        }
+
+        public string CurrentKeySignature
+        {
+            get { return _document.KeySignature; }
+        }
+
+        private ScoreEditResult ApplyAddChordMarker(int measureIndex, double beatPosition)
+        {
+            _document.EnsureMeasures();
+            if (measureIndex < 0 || measureIndex >= _document.Score.Measures.Count)
+            {
+                return ScoreEditResult.Unchanged;
+            }
+
+            var measure = _document.Score.Measures[measureIndex];
+            if (!ChordMarkerService.TryAddMarker(measure, beatPosition))
+            {
+                if (beatPosition == 0)
+                {
+                    var status = "当前小节最多 " + JianpuMeasure.MaxChordMarkers + " 个和弦标识";
+                    _messenger.Send(new StatusChangedMessage(status));
+                }
+
+                return ScoreEditResult.Unchanged;
+            }
+
+            var markerIndex = measure.ChordMarkers.Count - 1;
+            return new ScoreEditResult
+            {
+                Changed = true,
+                Message = "已添加和弦标识",
+                SelectMeasureIndex = measureIndex,
+                SelectChordMeasureIndex = measureIndex,
+                SelectChordMarkerIndex = markerIndex
+            };
+        }
+
+        private ScoreEditResult ApplyTransposeChords(string targetKey)
+        {
             if (!_chordTransposeService.TryTransposeChords(
                     _document.Score,
-                    targetKey.Trim(),
+                    targetKey,
                     out var errorMessage,
                     out var transposedCount))
             {
@@ -219,14 +272,8 @@ namespace JianpuEditor.ViewModels
             }
 
             var message = "已将 " + transposedCount + " 个和弦转调到 " + _document.Score.KeySignature;
-            _messenger.Send(new ScoreEditedMessage(message));
             OnPropertyChanged(nameof(CurrentKeySignature));
             return ScoreEditResult.WithMessage(message);
-        }
-
-        public string CurrentKeySignature
-        {
-            get { return _document.KeySignature; }
         }
 
         private bool CanTransposeChords(string targetKey)

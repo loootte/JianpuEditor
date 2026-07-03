@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
-using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
 using JianpuEditor.Services;
+using JianpuEditor.Services.EditCommands;
 
 namespace JianpuEditor.ViewModels
 {
@@ -17,19 +18,22 @@ namespace JianpuEditor.ViewModels
         private readonly MeasureNavigationViewModel _navigation;
         private readonly ChordEditorViewModel _chordEditor;
         private readonly IAppMessenger _messenger;
+        private readonly IEditCommandHistory _history;
 
         public ScoreEditorViewModel(
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
             MeasureNavigationViewModel navigation,
             ChordEditorViewModel chordEditor,
-            IAppMessenger messenger)
+            IAppMessenger messenger,
+            IEditCommandHistory history)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
             _selection = selection ?? throw new ArgumentNullException(nameof(selection));
             _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
             _chordEditor = chordEditor ?? throw new ArgumentNullException(nameof(chordEditor));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+            _history = history ?? throw new ArgumentNullException(nameof(history));
             DeleteCommand = new RelayCommand(() => Delete());
             ClearScoreCommand = new RelayCommand(() => ClearScore());
         }
@@ -40,13 +44,26 @@ namespace JianpuEditor.ViewModels
 
         public ScoreEditResult Delete()
         {
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(_document, _navigation, _messenger, ApplyDelete, "删除"));
+        }
+
+        public ScoreEditResult ClearScore()
+        {
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(_document, _navigation, _messenger, ApplyClearScore, "清空谱面"));
+        }
+
+        private ScoreEditResult ApplyDelete()
+        {
             if (_selection.HasTieSelected
                 && _document.Score.Ties != null
                 && _selection.TieIndex >= 0
                 && _selection.TieIndex < _document.Score.Ties.Count)
             {
                 _document.Score.Ties.RemoveAt(_selection.TieIndex);
-                _messenger.Send(new ScoreEditedMessage("已删除连音线"));
                 return new ScoreEditResult
                 {
                     Changed = true,
@@ -55,7 +72,7 @@ namespace JianpuEditor.ViewModels
                 };
             }
 
-            var chordResult = _chordEditor.RemoveSelectedChord();
+            var chordResult = _chordEditor.TryRemoveSelectedChord();
             if (chordResult.Changed)
             {
                 return chordResult;
@@ -97,7 +114,6 @@ namespace JianpuEditor.ViewModels
                         var message = removedCount > 1
                             ? "已删除 " + removedCount + " 个选中音符"
                             : "已删除选中音符";
-                        _messenger.Send(new ScoreEditedMessage(message));
                         return new ScoreEditResult
                         {
                             Changed = true,
@@ -114,7 +130,6 @@ namespace JianpuEditor.ViewModels
                 var noteIndex = measure.MelodyNotes.Count - 1;
                 measure.MelodyNotes.RemoveAt(noteIndex);
                 TieMaintenanceService.OnNoteRemoved(_document.Score, measureIndex, noteIndex);
-                _messenger.Send(new ScoreEditedMessage("已删除当前小节最后一个音符"));
                 return new ScoreEditResult
                 {
                     Changed = true,
@@ -131,7 +146,6 @@ namespace JianpuEditor.ViewModels
                 _document.Score.Measures.RemoveAt(removedMeasureIndex);
                 var newIndex = Math.Max(0, removedMeasureIndex - 1);
                 _navigation.SyncCurrentMeasureIndex(newIndex);
-                _messenger.Send(new ScoreEditedMessage("已删除空小节"));
                 return new ScoreEditResult
                 {
                     Changed = true,
@@ -144,11 +158,10 @@ namespace JianpuEditor.ViewModels
             return ScoreEditResult.Unchanged;
         }
 
-        public ScoreEditResult ClearScore()
+        private ScoreEditResult ApplyClearScore()
         {
             _document.ClearMeasures();
             _navigation.SyncCurrentMeasureIndex(0);
-            _messenger.Send(new ScoreEditedMessage("谱面已清空"));
             return new ScoreEditResult
             {
                 Changed = true,

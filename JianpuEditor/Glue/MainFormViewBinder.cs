@@ -96,12 +96,16 @@ namespace JianpuEditor.Glue
             _measureRangeFrom.Maximum = measureCount;
             _measureRangeTo.Maximum = measureCount;
 
-            var currentIndex = Math.Max(0, _viewModel.MeasureNavigation.CurrentMeasureIndex);
-            _measureSelector.Value = Math.Max(1, currentIndex + 1);
+            var currentIndex = Math.Max(0, Math.Min(
+                _viewModel.MeasureNavigation.CurrentMeasureIndex,
+                measureCount - 1));
+            _measureSelector.Value = Math.Max(1, Math.Min(measureCount, currentIndex + 1));
 
             var range = _viewModel.Selection.GetMeasureRangeIndices();
-            _measureRangeFrom.Value = Math.Max(1, range.fromIndex + 1);
-            _measureRangeTo.Value = Math.Max(1, range.toIndex + 1);
+            var fromIndex = Math.Max(0, Math.Min(range.fromIndex, measureCount - 1));
+            var toIndex = Math.Max(0, Math.Min(range.toIndex, measureCount - 1));
+            _measureRangeFrom.Value = Math.Max(1, Math.Min(measureCount, fromIndex + 1));
+            _measureRangeTo.Value = Math.Max(1, Math.Min(measureCount, toIndex + 1));
             _suppressMeasureRangeSync = false;
             _suppressMeasureSelectorSync = false;
         }
