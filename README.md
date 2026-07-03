@@ -51,6 +51,7 @@
 
 ```powershell
 dotnet build JianpuEditor.sln -c Debug
+dotnet test JianpuEditor.sln -c Debug
 .\JianpuEditor\bin\Debug\net472\JianpuEditor.exe
 ```
 
@@ -77,7 +78,7 @@ GitHub Actions 工作流位于 `.github/workflows/`：
 
 | 工作流 | 触发 | 说明 |
 |--------|------|------|
-| **CI** | `main` 分支 push / PR | Release 构建 + MIDI 导出冒烟测试，上传构建产物 |
+| **CI** | `main` 分支 push / PR | Release 构建 + 单元测试 + MIDI 导出冒烟测试，上传构建产物 |
 | **Release** | 推送标签 `v*` 或手动运行 | 构建安装包（`.exe` + `.zip`），标签发布时自动创建 GitHub Release |
 
 ### 发布新版本
@@ -166,6 +167,7 @@ JianpuEditor/
   Services/                # JSON/PDF/MIDI、播放、和弦解析/转调、连音线维护
   installer/               # Inno Setup 安装脚本
   scripts/                 # 构建与测试脚本
+JianpuEditor.Tests/        # xUnit 单元测试（核心服务与模型）
 ```
 
 ## 依赖

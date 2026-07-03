@@ -54,6 +54,9 @@ jobs:
       - name: Build Release
         run: dotnet build JianpuEditor.sln -c Release
 
+      - name: Unit tests
+        run: dotnet test JianpuEditor.sln -c Release --no-build --verbosity normal
+
       - name: MIDI export smoke test
         shell: pwsh
         run: ./scripts/test-midi-export.ps1
