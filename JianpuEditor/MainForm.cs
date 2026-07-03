@@ -450,7 +450,7 @@ namespace JianpuEditor
 
             _commandHistory.Undo();
             _viewModel.SetStatus("已撤回");
-            _glue.RefreshCanvas();
+            _glue.SyncAfterHistoryChange(CreateHistoryRefreshResult());
             _binder.SyncHeaderFromDocument();
             _binder.SyncFromViewModels();
             UpdateUndoMenuState();
@@ -465,14 +465,24 @@ namespace JianpuEditor
 
             _commandHistory.Redo();
             _viewModel.SetStatus("已重做");
-            _glue.ApplyEditResult(new ScoreEditResult
-            {
-                Changed = true,
-                RequiresScoreRefresh = true
-            });
+            _glue.SyncAfterHistoryChange(CreateHistoryRefreshResult());
             _binder.SyncHeaderFromDocument();
             _binder.SyncFromViewModels();
             UpdateUndoMenuState();
+        }
+
+        private ScoreEditResult CreateHistoryRefreshResult()
+        {
+            var measureIndex = _viewModel.MeasureNavigation.CurrentMeasureIndex;
+            return new ScoreEditResult
+            {
+                Changed = true,
+                RequiresScoreRefresh = true,
+                SelectMeasureIndex = measureIndex,
+                ClearMelodySelection = true,
+                ClearTieSelection = true,
+                ClearChordSelection = true
+            };
         }
 
         private void OnFormKeyDown(object sender, KeyEventArgs e)

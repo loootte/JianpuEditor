@@ -86,6 +86,18 @@ namespace JianpuEditor.Glue
             _canvas.RefreshScore();
         }
 
+        public void SyncAfterHistoryChange(ScoreEditResult result = null)
+        {
+            AttachDocumentScore();
+            if (result != null && result.Changed)
+            {
+                ApplyEditResult(result);
+                return;
+            }
+
+            RefreshCanvas();
+        }
+
         public void ResetPlaybackHead()
         {
             _viewModel.Playback.ResetHead();
