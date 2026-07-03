@@ -16,8 +16,31 @@ namespace JianpuEditor.Glue
 
             form.BackColor = AppTheme.FormBackground;
             form.ForeColor = AppTheme.FormForeground;
+            ApplyMenuStrip(form.MainMenuStrip);
             ApplyControlTree(form.Controls, canvas);
             form.Invalidate(true);
+        }
+
+        public static void ApplyMenuStrip(MenuStrip menuStrip)
+        {
+            if (menuStrip == null)
+            {
+                return;
+            }
+
+            menuStrip.Visible = true;
+            menuStrip.GripStyle = ToolStripGripStyle.Hidden;
+            menuStrip.ForeColor = AppTheme.IsDarkMode ? AppTheme.FormForeground : SystemColors.ControlText;
+            if (AppTheme.IsDarkMode)
+            {
+                menuStrip.BackColor = AppTheme.FormBackground;
+            }
+            else
+            {
+                menuStrip.RenderMode = ToolStripRenderMode.System;
+                menuStrip.Renderer = null;
+                menuStrip.BackColor = SystemColors.MenuBar;
+            }
         }
 
         private static void ApplyControlTree(Control.ControlCollection controls, ScoreCanvas canvas)
@@ -40,10 +63,22 @@ namespace JianpuEditor.Glue
                 return;
             }
 
-            if (control is MenuStrip || control is ToolStrip)
+            if (control is MenuStrip menuStrip)
+            {
+                ApplyMenuStrip(menuStrip);
+                return;
+            }
+
+            if (control is ToolStrip toolStrip)
+            {
+                toolStrip.BackColor = AppTheme.FormBackground;
+                toolStrip.ForeColor = AppTheme.FormForeground;
+                return;
+            }
+
+            if (control is TableLayoutPanel || control is FlowLayoutPanel)
             {
                 control.BackColor = AppTheme.FormBackground;
-                control.ForeColor = AppTheme.FormForeground;
                 return;
             }
 

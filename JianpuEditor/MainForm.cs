@@ -8,14 +8,20 @@ using JianpuEditor.Glue;
 using JianpuEditor.Rendering;
 using JianpuEditor.Services;
 using JianpuEditor.ViewModels;
+using JianpuEditor.Views;
 
 namespace JianpuEditor
 {
-    public sealed class MainForm : Form
+    public sealed partial class MainForm : Form, IView
     {
         private readonly MainViewModel _viewModel;
-        private readonly ScoreCanvasGlue _glue;
-        private readonly MainFormViewBinder _binder;
+        private readonly IAppMessenger _messenger;
+        private readonly ILayoutService _layoutService;
+        private ScoreCanvasGlue _glue;
+        private MainFormViewBinder _binder;
+        private MainFormLayoutContext _layoutContext;
+        private TableLayoutPanel _mainLayout;
+        private TableLayoutPanel _chromeLayout;
         private readonly ScoreCanvas _canvas = new ScoreCanvas();
         private readonly TextBox _titleBox = new TextBox();
         private readonly TextBox _keyBox = new TextBox();
@@ -31,30 +37,34 @@ namespace JianpuEditor
         private Button _tieButton;
         private Button _playButton;
         private Button _stopButton;
+        private MenuStrip _menuStrip;
         private ContextMenuStrip _sampleLibraryMenu;
         private ToolStripMenuItem _darkModeMenuItem;
 
-        public MainForm(MainViewModel viewModel, IAppMessenger messenger)
+        public MainForm(MainViewModel viewModel, IAppMessenger messenger, ILayoutService layoutService)
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+            _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+            _layoutService = layoutService ?? throw new ArgumentNullException(nameof(layoutService));
 
-            Text = "简谱编辑器";
-            Width = 1280;
-            Height = 820;
-            MinimumSize = new Size(960, 640);
-            StartPosition = FormStartPosition.CenterScreen;
-            Font = new Font("Microsoft YaHei", 9f);
-            KeyPreview = true;
+            InitializeComponent();
+            SetupLayoutStructure();
+
             KeyDown += OnFormKeyDown;
+            Load += OnFormLoad;
+            Resize += OnFormResize;
+            FormClosed += OnFormClosed;
+        }
 
-            BuildMenu();
-            BuildCanvas();
-            BuildFooter();
-            BuildToolbar();
-            BuildHeader();
+        public void InitializeBindings(object viewModel)
+        {
+            if (viewModel is not MainViewModel mainViewModel)
+            {
+                throw new ArgumentException("MainForm requires MainViewModel.", nameof(viewModel));
+            }
 
             _binder = new MainFormViewBinder(
-                _viewModel,
+                mainViewModel,
                 this,
                 _titleBox,
                 _keyBox,
@@ -71,21 +81,108 @@ namespace JianpuEditor
                 _playButton,
                 _stopButton);
 
-            _glue = new ScoreCanvasGlue(_viewModel, _canvas, messenger);
+            _glue = new ScoreCanvasGlue(mainViewModel, _canvas, _messenger);
 
             _canvas.SelectionChanged += OnCanvasSelectionChanged;
             _canvas.MeasureTextEdited += OnCanvasMeasureTextEdited;
             _canvas.ChordMarkersChanged += OnCanvasChordMarkersChanged;
             _canvas.PlaybackSeeked += OnCanvasPlaybackSeeked;
 
-            _viewModel.RequestOpenScore += (s, e) => OnOpenScore(s, e);
-            _viewModel.RequestSaveScore += (s, e) => OnSaveScore(s, e);
-            _viewModel.RequestSaveAsScore += (s, e) => OnSaveScoreAs(s, e);
-            _viewModel.RequestExportPdf += (s, e) => OnExportPdf(s, e);
-            _viewModel.RequestExportMidi += (s, e) => OnExportMidi(s, e);
-            _viewModel.RequestTransposeDialog += (s, e) => ShowTransposeDialog();
+            mainViewModel.RequestOpenScore += (s, e) => OnOpenScore(s, e);
+            mainViewModel.RequestSaveScore += (s, e) => OnSaveScore(s, e);
+            mainViewModel.RequestSaveAsScore += (s, e) => OnSaveScoreAs(s, e);
+            mainViewModel.RequestExportPdf += (s, e) => OnExportPdf(s, e);
+            mainViewModel.RequestExportMidi += (s, e) => OnExportMidi(s, e);
+            mainViewModel.RequestTransposeDialog += (s, e) => ShowTransposeDialog();
+        }
 
-            FormClosed += OnFormClosed;
+        public void RestoreLayout()
+        {
+            _layoutService.RestoreLayout();
+        }
+
+        public void ApplyTheme()
+        {
+            _layoutService.ApplyTheme();
+            _binder?.SyncFromViewModels();
+        }
+
+        private void SetupLayoutStructure()
+        {
+            _menuStrip = BuildMenuStrip();
+            var headerPanel = BuildHeaderPanel();
+            var toolbarPanel = BuildToolbarPanel();
+            ConfigureStatusLabel();
+
+            _chromeLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                AutoSize = false,
+                Padding = new Padding(0),
+                Margin = new Padding(0)
+            };
+            _chromeLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            _chromeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, MainFormLayoutContext.MinimumMenuHeight));
+            _chromeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, MainFormLayoutContext.HeaderRowHeight));
+            _chromeLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, MainFormLayoutContext.DefaultToolbarHeight));
+
+            _menuStrip.Dock = DockStyle.Fill;
+            headerPanel.Dock = DockStyle.Fill;
+            toolbarPanel.Dock = DockStyle.Fill;
+
+            _chromeLayout.Controls.Add(_menuStrip, 0, 0);
+            _chromeLayout.Controls.Add(headerPanel, 0, 1);
+            _chromeLayout.Controls.Add(toolbarPanel, 0, 2);
+
+            _mainLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                Padding = new Padding(0),
+                Margin = new Padding(0)
+            };
+            _mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            _mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            _mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            _canvas.Dock = DockStyle.Fill;
+            _canvas.MinimumSize = new Size(200, 200);
+            _statusLabel.Dock = DockStyle.Fill;
+            _statusLabel.MinimumSize = new Size(0, MainFormLayoutContext.StatusRowHeight);
+
+            _mainLayout.Controls.Add(_chromeLayout, 0, 0);
+            _mainLayout.Controls.Add(_canvas, 0, 1);
+            _mainLayout.Controls.Add(_statusLabel, 0, 2);
+
+            Controls.Clear();
+            Controls.Add(_mainLayout);
+            MainMenuStrip = _menuStrip;
+
+            _layoutContext = new MainFormLayoutContext
+            {
+                Form = this,
+                MainLayout = _mainLayout,
+                ChromeLayout = _chromeLayout,
+                MenuStrip = _menuStrip,
+                HeaderPanel = headerPanel,
+                ToolbarPanel = toolbarPanel,
+                ScoreCanvas = _canvas,
+                StatusLabel = _statusLabel
+            };
+            _layoutService.Attach(_layoutContext);
+        }
+
+        private void OnFormLoad(object sender, EventArgs e)
+        {
+            InitializeBindings(_viewModel);
+            RestoreLayout();
+            ApplyDpiScaling();
+            ApplyTheme();
+
             AppLog.Info("简谱编辑器启动");
 
             var demoResult = _viewModel.SampleLibrary.LoadDemoScore();
@@ -94,10 +191,19 @@ namespace JianpuEditor
             _binder.SyncHeaderFromDocument();
             _binder.SyncFromViewModels();
             _viewModel.SetStatus("就绪 - 点击音符修改，副旋律行可添加/拖动和弦标识，点击歌词行编辑文字");
-            WinFormsThemeApplier.Apply(this, _canvas);
         }
 
-        private void BuildMenu()
+        private void OnFormResize(object sender, EventArgs e)
+        {
+            RestoreLayout();
+        }
+
+        private void ApplyDpiScaling()
+        {
+            _layoutService.ApplyDpiScaling();
+        }
+
+        private MenuStrip BuildMenuStrip()
         {
             var menu = new MenuStrip();
 
@@ -132,19 +238,19 @@ namespace JianpuEditor
             };
             _darkModeMenuItem.CheckedChanged += OnDarkModeToggled;
             viewMenu.DropDownItems.Add(_darkModeMenuItem);
+            viewMenu.DropDownItems.Add(new ToolStripSeparator());
+            viewMenu.DropDownItems.Add(CreateMenuItem("重置布局", Keys.None, (s, e) => RestoreLayout()));
 
             menu.Items.Add(fileMenu);
             menu.Items.Add(editMenu);
             menu.Items.Add(viewMenu);
-            MainMenuStrip = menu;
+            return menu;
         }
 
-        private void BuildHeader()
+        private TableLayoutPanel BuildHeaderPanel()
         {
             var panel = new TableLayoutPanel
             {
-                Dock = DockStyle.Top,
-                Height = 88,
                 Padding = new Padding(12, 8, 12, 8),
                 ColumnCount = 10
             };
@@ -180,18 +286,16 @@ namespace JianpuEditor
             panel.Controls.Add(new Label { Text = "作曲", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 8, 0);
             panel.Controls.Add(_composerBox, 9, 0);
 
-            Controls.Add(panel);
+            return panel;
         }
 
-        private void BuildToolbar()
+        private FlowLayoutPanel BuildToolbarPanel()
         {
             var panel = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top,
-                Height = 120,
                 Padding = new Padding(12, 8, 12, 8),
                 WrapContents = true,
-                AutoScroll = true
+                AutoScroll = false
             };
 
             panel.Controls.Add(CreateToolButton("打开", () => _viewModel.OpenScoreCommand.Execute(null)));
@@ -273,23 +377,14 @@ namespace JianpuEditor
             sampleButton.Click += (s, e) => _sampleLibraryMenu.Show(sampleButton, new Point(0, sampleButton.Height));
             panel.Controls.Add(sampleButton);
 
-            Controls.Add(panel);
+            return panel;
         }
 
-        private void BuildCanvas()
+        private void ConfigureStatusLabel()
         {
-            _canvas.Dock = DockStyle.Fill;
-            _canvas.MinimumSize = new Size(200, 200);
-            Controls.Add(_canvas);
-        }
-
-        private void BuildFooter()
-        {
-            _statusLabel.Dock = DockStyle.Bottom;
-            _statusLabel.Height = 28;
             _statusLabel.Padding = new Padding(12, 6, 0, 0);
             _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-            Controls.Add(_statusLabel);
+            _statusLabel.Height = MainFormLayoutContext.StatusRowHeight;
         }
 
         private Button CreateToolButton(string text, Action onClick)
@@ -319,8 +414,7 @@ namespace JianpuEditor
         private void OnDarkModeToggled(object sender, EventArgs e)
         {
             AppTheme.SetDarkMode(_darkModeMenuItem.Checked);
-            WinFormsThemeApplier.Apply(this, _canvas);
-            _binder.SyncFromViewModels();
+            ApplyTheme();
         }
 
         private static ToolStripMenuItem CreateMenuItem(string text, Keys shortcut, EventHandler handler)
@@ -708,8 +802,8 @@ namespace JianpuEditor
         private void OnFormClosed(object sender, FormClosedEventArgs e)
         {
             AppLog.Info("简谱编辑器退出");
-            _glue.Dispose();
-            _binder.Dispose();
+            _glue?.Dispose();
+            _binder?.Dispose();
             _viewModel.Dispose();
         }
 

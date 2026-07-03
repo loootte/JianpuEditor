@@ -89,7 +89,7 @@ namespace JianpuEditor.Glue
         public void ResetPlaybackHead()
         {
             _viewModel.Playback.ResetHead();
-            _canvas.SetPlaybackPosition(0, showHead: true, ensureVisible: true);
+            _canvas.SetPlaybackPosition(0, showHead: true, ensureVisible: false);
         }
 
         public void Dispose()
