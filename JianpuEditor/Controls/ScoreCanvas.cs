@@ -1271,6 +1271,12 @@ namespace JianpuEditor.Controls
                 return;
             }
 
+            if (_playbackPositionQuarter <= 0.0001)
+            {
+                AutoScrollPosition = new Point(0, 0);
+                return;
+            }
+
             var marker = PlaybackLayout.GetMarkerPosition(_playbackSegments, _playbackPositionQuarter);
             if (!marker.IsVisible)
             {
@@ -1279,17 +1285,26 @@ namespace JianpuEditor.Controls
 
             var scrollX = -AutoScrollPosition.X;
             var scrollY = -AutoScrollPosition.Y;
-            var viewWidth = Math.Max(0, ClientSize.Width - SystemInformation.VerticalScrollBarWidth);
-            var viewHeight = Math.Max(0, ClientSize.Height - SystemInformation.HorizontalScrollBarHeight);
-            const int margin = 72;
-            if (marker.X >= scrollX + margin && marker.X <= scrollX + viewWidth - margin &&
-                marker.Top >= scrollY + margin && marker.Bottom <= scrollY + viewHeight - margin)
+            var viewWidth = Math.Max(0, ClientSize.Width - (VScroll ? SystemInformation.VerticalScrollBarWidth : 0));
+            var viewHeight = Math.Max(0, ClientSize.Height - (HScroll ? SystemInformation.HorizontalScrollBarHeight : 0));
+            if (viewWidth <= 0 || viewHeight <= 0)
             {
                 return;
             }
 
-            var targetX = marker.X - viewWidth / 3;
-            var targetY = marker.Top - 24;
+            const int horizontalMargin = 24;
+            const int verticalMargin = 48;
+            var markerHorizontallyVisible = marker.X >= scrollX + horizontalMargin
+                && marker.X <= scrollX + viewWidth - horizontalMargin;
+            var markerVerticallyVisible = marker.Top >= scrollY + verticalMargin
+                && marker.Bottom <= scrollY + viewHeight - verticalMargin;
+            if (markerHorizontallyVisible && markerVerticallyVisible)
+            {
+                return;
+            }
+
+            var targetX = markerHorizontallyVisible ? scrollX : marker.X - viewWidth / 3;
+            var targetY = markerVerticallyVisible ? scrollY : marker.Top - verticalMargin;
             var maxX = Math.Max(0, _contentPanel.Width - viewWidth);
             var maxY = Math.Max(0, _contentPanel.Height - viewHeight);
             AutoScrollPosition = new Point(

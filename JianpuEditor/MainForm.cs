@@ -32,7 +32,6 @@ namespace JianpuEditor
         private Button _playButton;
         private Button _stopButton;
         private const int HeaderPanelHeight = 88;
-        private const int ToolbarPanelHeight = 120;
 
         private TableLayoutPanel _topChrome;
         private MenuStrip _menuStrip;
@@ -52,9 +51,14 @@ namespace JianpuEditor
             KeyPreview = true;
             KeyDown += OnFormKeyDown;
 
+            SuspendLayout();
             BuildFooter();
+            BuildMenuStrip();
             BuildTopChrome();
             BuildCanvas();
+            ResumeLayout(true);
+            Shown += OnFormShown;
+            Resize += OnFormResize;
 
             _binder = new MainFormViewBinder(
                 _viewModel,
@@ -100,6 +104,13 @@ namespace JianpuEditor
             WinFormsThemeApplier.Apply(this, _canvas);
         }
 
+        private void BuildMenuStrip()
+        {
+            _menuStrip = new MenuStrip();
+            PopulateMenuStrip(_menuStrip);
+            MainMenuStrip = _menuStrip;
+        }
+
         private void BuildTopChrome()
         {
             var headerPanel = CreateHeaderPanel();
@@ -117,16 +128,27 @@ namespace JianpuEditor
             };
             _topChrome.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
             _topChrome.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderPanelHeight));
-            _topChrome.RowStyles.Add(new RowStyle(SizeType.Absolute, ToolbarPanelHeight));
+            _topChrome.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             _topChrome.Controls.Add(headerPanel, 0, 0);
             _topChrome.Controls.Add(toolbarPanel, 0, 1);
-
-            _menuStrip = new MenuStrip();
-            PopulateMenuStrip(_menuStrip);
-
             Controls.Add(_topChrome);
-            Controls.Add(_menuStrip);
-            MainMenuStrip = _menuStrip;
+        }
+
+        private void OnFormShown(object sender, EventArgs e)
+        {
+            ResetCanvasViewport();
+        }
+
+        private void OnFormResize(object sender, EventArgs e)
+        {
+            _topChrome?.PerformLayout();
+            ResetCanvasViewport();
+        }
+
+        private void ResetCanvasViewport()
+        {
+            _canvas.AutoScrollPosition = new Point(0, 0);
+            _canvas.RefreshScore();
         }
 
         private void PopulateMenuStrip(MenuStrip menu)
@@ -217,10 +239,11 @@ namespace JianpuEditor
             var panel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                Height = ToolbarPanelHeight,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Padding = new Padding(12, 8, 12, 8),
                 WrapContents = true,
-                AutoScroll = true
+                AutoScroll = false
             };
 
             panel.Controls.Add(CreateToolButton("打开", () => _viewModel.OpenScoreCommand.Execute(null)));
