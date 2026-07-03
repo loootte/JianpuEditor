@@ -79,7 +79,7 @@ namespace JianpuEditor.Services
                 return;
             }
 
-            var tokens = TokenizeLegacyLyricText(measure.LyricText);
+            var tokens = TokenizeLyricText(measure.LyricText);
             if (tokens.Count == 0)
             {
                 return;
@@ -166,7 +166,7 @@ namespace JianpuEditor.Services
             return Math.Max(0, Math.Min(maxBeat, snapped));
         }
 
-        private static List<string> TokenizeLegacyLyricText(string lyricText)
+        public static List<string> TokenizeLyricText(string lyricText)
         {
             var trimmed = lyricText?.Trim() ?? string.Empty;
             if (trimmed.Length == 0)
