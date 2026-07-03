@@ -45,6 +45,20 @@ namespace JianpuEditor.Tests.Models
         }
 
         [Fact]
+        public void GetMeasureIndicesSpanning_ReturnsContinuousMeasureRange()
+        {
+            var notes = new[]
+            {
+                new ScoreNoteRef(1, 0),
+                new ScoreNoteRef(4, 2)
+            };
+
+            var measures = NoteSelectionRange.GetMeasureIndicesSpanning(notes);
+
+            Assert.Equal(new[] { 1, 2, 3, 4 }, measures);
+        }
+
+        [Fact]
         public void ContainsAll_DetectsFullySelectedRange()
         {
             var selected = new[]

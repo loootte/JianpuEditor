@@ -140,15 +140,23 @@ namespace JianpuEditor.ViewModels
                 }
             }
 
+            if (HasMultipleNotesSelected)
+            {
+                var minMeasure = SelectedNotes.Min(note => note.MeasureIndex);
+                var maxMeasure = SelectedNotes.Max(note => note.MeasureIndex);
+                if (minMeasure != maxMeasure)
+                {
+                    return "已选中 " + SelectedNotes.Count + " 个音符（第 " + (minMeasure + 1) +
+                           " 到第 " + (maxMeasure + 1) + " 小节），可用上方按钮批量修改";
+                }
+
+                return "已选中 " + SelectedNotes.Count + " 个音符，可用上方按钮批量修改";
+            }
+
             if (SelectedMeasureIndices != null && SelectedMeasureIndices.Count > 1)
             {
                 return "已选择第 " + (SelectedMeasureIndices.Min() + 1) + " 到第 " +
                        (SelectedMeasureIndices.Max() + 1) + " 小节，可点击「复制小节」";
-            }
-
-            if (HasMultipleNotesSelected)
-            {
-                return "已选中 " + SelectedNotes.Count + " 个音符，可用上方按钮批量修改";
             }
 
             if (HasNoteSelected)

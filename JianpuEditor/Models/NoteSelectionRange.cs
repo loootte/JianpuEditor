@@ -47,6 +47,18 @@ namespace JianpuEditor.Models
             return refs;
         }
 
+        public static IReadOnlyList<int> GetMeasureIndicesSpanning(IReadOnlyList<ScoreNoteRef> notes)
+        {
+            if (notes == null || notes.Count == 0)
+            {
+                return Array.Empty<int>();
+            }
+
+            var minMeasure = notes.Min(note => note.MeasureIndex);
+            var maxMeasure = notes.Max(note => note.MeasureIndex);
+            return Enumerable.Range(minMeasure, maxMeasure - minMeasure + 1).ToArray();
+        }
+
         public static bool ContainsAll(IReadOnlyList<ScoreNoteRef> selected, IReadOnlyList<ScoreNoteRef> range)
         {
             if (range == null || range.Count == 0)

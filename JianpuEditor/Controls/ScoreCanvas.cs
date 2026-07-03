@@ -893,7 +893,7 @@ namespace JianpuEditor.Controls
 
         private void ApplyNoteSelection(IReadOnlyList<ScoreNoteRef> notes, int primaryMeasureIndex, int primaryNoteIndex)
         {
-            SetSelectedMeasures(new[] { primaryMeasureIndex }, primaryMeasureIndex, false);
+            SyncMeasureSelectionForNotes(notes, primaryMeasureIndex);
             _measureSelectionAnchor = primaryMeasureIndex;
             SetSelectedNotes(notes, primaryMeasureIndex, primaryNoteIndex);
             _selectedInsertIndex = -1;
@@ -901,6 +901,18 @@ namespace JianpuEditor.Controls
             ClearChordSelection();
             RaiseSelectionChanged();
             InvalidateSelection();
+        }
+
+        private void SyncMeasureSelectionForNotes(IReadOnlyList<ScoreNoteRef> notes, int primaryMeasureIndex)
+        {
+            var measureIndices = NoteSelectionRange.GetMeasureIndicesSpanning(notes);
+            if (measureIndices.Count == 0)
+            {
+                SetSelectedMeasures(new[] { primaryMeasureIndex }, primaryMeasureIndex, false);
+                return;
+            }
+
+            SetSelectedMeasures(measureIndices, primaryMeasureIndex, false);
         }
 
         private void SetSelectedNotes(IReadOnlyList<ScoreNoteRef> notes, int primaryMeasureIndex, int primaryNoteIndex)
