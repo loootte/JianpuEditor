@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
 using JianpuEditor.Services;
+using JianpuEditor.Services.NoteEditCommands;
 
 namespace JianpuEditor.ViewModels
 {
@@ -15,16 +17,19 @@ namespace JianpuEditor.ViewModels
         private readonly ScoreDocumentViewModel _document;
         private readonly ScoreSelectionViewModel _selection;
         private readonly IAppMessenger _messenger;
+        private readonly IEditCommandHistory _history;
         private JianpuNote _pendingNote = CreateDefaultNote();
 
         public NoteEditorViewModel(
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
-            IAppMessenger messenger)
+            IAppMessenger messenger,
+            IEditCommandHistory history)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
             _selection = selection ?? throw new ArgumentNullException(nameof(selection));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
+            _history = history ?? throw new ArgumentNullException(nameof(history));
 
             AddNoteCommand = new RelayCommand<int>(pitch => AddNote(pitch));
             AddRestCommand = new RelayCommand(() => AddRest());
@@ -71,15 +76,22 @@ namespace JianpuEditor.ViewModels
             var selectedNotes = GetSelectedNotes();
             if (selectedNotes.Count > 0)
             {
-                foreach (var selected in selectedNotes)
-                {
-                    selected.Type = NoteType.Note;
-                    selected.Pitch = pitch;
-                }
-
-                return PublishEdit(selectedNotes.Count > 1
+                var message = selectedNotes.Count > 1
                     ? "已修改 " + selectedNotes.Count + " 个选中音符为 " + pitch
-                    : "已修改选中音符为 " + pitch);
+                    : "已修改选中音符为 " + pitch;
+                return ExecuteCommand(new ModifyMelodyNotesCommand(
+                    _document.Score,
+                    _messenger,
+                    GetSelectedNoteRefs(),
+                    () =>
+                    {
+                        foreach (var selected in selectedNotes)
+                        {
+                            selected.Type = NoteType.Note;
+                            selected.Pitch = pitch;
+                        }
+                    },
+                    message));
             }
 
             var note = ClonePendingNote();
@@ -93,15 +105,22 @@ namespace JianpuEditor.ViewModels
             var selectedNotes = GetSelectedNotes();
             if (selectedNotes.Count > 0)
             {
-                foreach (var selected in selectedNotes)
-                {
-                    selected.Type = NoteType.Rest;
-                    selected.Pitch = 0;
-                }
-
-                return PublishEdit(selectedNotes.Count > 1
+                var message = selectedNotes.Count > 1
                     ? "已修改 " + selectedNotes.Count + " 个选中音符为休止符"
-                    : "已修改选中音符为休止符");
+                    : "已修改选中音符为休止符";
+                return ExecuteCommand(new ModifyMelodyNotesCommand(
+                    _document.Score,
+                    _messenger,
+                    GetSelectedNoteRefs(),
+                    () =>
+                    {
+                        foreach (var selected in selectedNotes)
+                        {
+                            selected.Type = NoteType.Rest;
+                            selected.Pitch = 0;
+                        }
+                    },
+                    message));
             }
 
             var note = ClonePendingNote();
@@ -115,14 +134,21 @@ namespace JianpuEditor.ViewModels
             var selectedNotes = GetSelectedNotes();
             if (selectedNotes.Count > 0)
             {
-                foreach (var selected in selectedNotes)
-                {
-                    selected.Octave = selected.Octave == octave ? 0 : octave;
-                }
-
-                return PublishEdit(selectedNotes.Count > 1
+                var message = selectedNotes.Count > 1
                     ? "已修改 " + selectedNotes.Count + " 个选中音符八度"
-                    : "已修改选中音符八度");
+                    : "已修改选中音符八度";
+                return ExecuteCommand(new ModifyMelodyNotesCommand(
+                    _document.Score,
+                    _messenger,
+                    GetSelectedNoteRefs(),
+                    () =>
+                    {
+                        foreach (var selected in selectedNotes)
+                        {
+                            selected.Octave = selected.Octave == octave ? 0 : octave;
+                        }
+                    },
+                    message));
             }
 
             _pendingNote.Octave = _pendingNote.Octave == octave ? 0 : octave;
@@ -136,15 +162,22 @@ namespace JianpuEditor.ViewModels
             var selectedNotes = GetSelectedNotes();
             if (selectedNotes.Count > 0)
             {
-                foreach (var selected in selectedNotes)
-                {
-                    selected.Dotted = !selected.Dotted;
-                }
-
-                var dotted = selectedNotes[0].Dotted;
-                return PublishEdit(selectedNotes.Count > 1
+                var dotted = !selectedNotes[0].Dotted;
+                var message = selectedNotes.Count > 1
                     ? (dotted ? "已为 " + selectedNotes.Count + " 个选中音符添加附点" : "已移除 " + selectedNotes.Count + " 个选中音符附点")
-                    : (dotted ? "已为选中音符添加附点" : "已移除选中音符附点"));
+                    : (dotted ? "已为选中音符添加附点" : "已移除选中音符附点");
+                return ExecuteCommand(new ModifyMelodyNotesCommand(
+                    _document.Score,
+                    _messenger,
+                    GetSelectedNoteRefs(),
+                    () =>
+                    {
+                        foreach (var selected in selectedNotes)
+                        {
+                            selected.Dotted = !selected.Dotted;
+                        }
+                    },
+                    message));
             }
 
             _pendingNote.Dotted = !_pendingNote.Dotted;
@@ -171,6 +204,152 @@ namespace JianpuEditor.ViewModels
                 return ScoreEditResult.Unchanged;
             }
 
+            _document.EnsureMeasures();
+            if (!CanSplitAny(refs))
+            {
+                return PublishEdit("无法拆分：音符已达最短时值或为休止符");
+            }
+
+            return ExecuteCommand(new MeasuresMelodySnapshotCommand(
+                _document.Score,
+                _messenger,
+                () => ApplySplitSelectedNotes(refs),
+                "拆分音符"));
+        }
+
+        public ScoreEditResult MergeSelectedNotes()
+        {
+            var refs = GetSelectedNoteRefs();
+            if (refs.Count < 2)
+            {
+                _messenger.Send(new StatusChangedMessage("请至少选中两个音符进行合并"));
+                return ScoreEditResult.Unchanged;
+            }
+
+            _document.EnsureMeasures();
+            if (NoteSplitMergeService.GetMergePairs(refs).Count == 0)
+            {
+                return PublishEdit("无法合并：请至少选中两个音符");
+            }
+
+            return ExecuteCommand(new MeasuresMelodySnapshotCommand(
+                _document.Score,
+                _messenger,
+                () => ApplyMergeSelectedNotes(refs),
+                "合并音符"));
+        }
+
+        public ScoreEditResult TransposePitch(int delta)
+        {
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
+            {
+                var changedCount = CountTransposableNotes(selectedNotes, delta);
+                if (changedCount == 0)
+                {
+                    return PublishEdit(delta > 0 ? "已达最高音" : "已达最低音");
+                }
+
+                var direction = delta > 0 ? "升" : "降";
+                var message = changedCount > 1
+                    ? "已" + direction + "key " + changedCount + " 个选中音符"
+                    : "已" + direction + "key选中音符";
+                return ExecuteCommand(new ModifyMelodyNotesCommand(
+                    _document.Score,
+                    _messenger,
+                    GetSelectedNoteRefs(),
+                    () =>
+                    {
+                        foreach (var selected in selectedNotes)
+                        {
+                            JianpuPitchService.TryTranspose(selected, delta);
+                        }
+                    },
+                    message));
+            }
+
+            if (!JianpuPitchService.TryTranspose(_pendingNote, delta))
+            {
+                _messenger.Send(new StatusChangedMessage(delta > 0 ? "下一音符已达最高音" : "下一音符已达最低音"));
+                return ScoreEditResult.Unchanged;
+            }
+
+            _messenger.Send(new StatusChangedMessage(
+                "下一音符音高: " + _pendingNote.Pitch +
+                (_pendingNote.Octave > 0 ? "·" : _pendingNote.Octave < 0 ? ".." : string.Empty)));
+            return ScoreEditResult.Unchanged;
+        }
+
+        private ScoreEditResult StepDuration(int delta)
+        {
+            var selectedNotes = GetSelectedNotes();
+            if (selectedNotes.Count > 0)
+            {
+                var tier = GetDurationTier(selectedNotes[0]);
+                var nextTier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, tier + delta));
+                if (nextTier == tier)
+                {
+                    var limit = delta > 0 ? "已达最长时值" : "已达最短时值";
+                    return PublishEdit(limit + "（" + GetDurationTierLabel(tier) + "）");
+                }
+
+                var message = selectedNotes.Count > 1
+                    ? "时值: " + GetDurationTierLabel(nextTier) + "（" + selectedNotes.Count + " 个音符）"
+                    : "时值: " + GetDurationTierLabel(nextTier);
+                return ExecuteCommand(new ModifyMelodyNotesCommand(
+                    _document.Score,
+                    _messenger,
+                    GetSelectedNoteRefs(),
+                    () =>
+                    {
+                        foreach (var selected in selectedNotes)
+                        {
+                            ApplyDurationTier(selected, nextTier);
+                        }
+                    },
+                    message));
+            }
+
+            var pendingTier = GetDurationTier(_pendingNote);
+            var nextPendingTier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, pendingTier + delta));
+            ApplyDurationTier(_pendingNote, nextPendingTier);
+            _messenger.Send(new StatusChangedMessage("下一音符时值: " + GetDurationTierLabel(nextPendingTier)));
+            return ScoreEditResult.Unchanged;
+        }
+
+        public void ResetPendingModifiers()
+        {
+            _pendingNote = CreateDefaultNote();
+        }
+
+        private ScoreEditResult InsertMelodyNote(JianpuNote note, string message)
+        {
+            _document.EnsureMeasures();
+            var measureIndex = Math.Max(0, _selection.MeasureIndex);
+            var measure = _document.Score.Measures[measureIndex];
+            int insertIndex;
+
+            if (_selection.HasGapSelected)
+            {
+                insertIndex = _selection.InsertIndex;
+            }
+            else
+            {
+                insertIndex = measure.MelodyNotes.Count;
+            }
+
+            return ExecuteCommand(new InsertMelodyNoteCommand(
+                _document.Score,
+                _messenger,
+                measureIndex,
+                insertIndex,
+                note,
+                message,
+                ResetPendingModifiers));
+        }
+
+        private ScoreEditResult ApplySplitSelectedNotes(IReadOnlyList<ScoreNoteRef> refs)
+        {
             _document.EnsureMeasures();
             var splitCount = 0;
             int? selectMeasureIndex = null;
@@ -205,30 +384,21 @@ namespace JianpuEditor.ViewModels
 
             if (splitCount == 0)
             {
-                return PublishEdit("无法拆分：音符已达最短时值或为休止符");
+                return BuildEditResult("无法拆分：音符已达最短时值或为休止符");
             }
 
-            var result = PublishEdit(splitCount > 1
-                ? "已拆分 " + splitCount + " 个音符"
-                : "已拆分选中音符");
-            result.SelectNoteMeasureIndex = selectMeasureIndex;
-            result.SelectNoteIndex = selectNoteIndex;
-            return result;
+            return BuildEditResult(
+                splitCount > 1 ? "已拆分 " + splitCount + " 个音符" : "已拆分选中音符",
+                selectMeasureIndex,
+                selectNoteIndex);
         }
 
-        public ScoreEditResult MergeSelectedNotes()
+        private ScoreEditResult ApplyMergeSelectedNotes(IReadOnlyList<ScoreNoteRef> refs)
         {
-            var refs = GetSelectedNoteRefs();
-            if (refs.Count < 2)
-            {
-                _messenger.Send(new StatusChangedMessage("请至少选中两个音符进行合并"));
-                return ScoreEditResult.Unchanged;
-            }
-
             _document.EnsureMeasures();
             if (NoteSplitMergeService.GetMergePairs(refs).Count == 0)
             {
-                return PublishEdit("无法合并：请至少选中两个音符");
+                return BuildEditResult("无法合并：请至少选中两个音符");
             }
 
             var mergedCount = NoteSplitMergeService.ApplyMergePairs(_document.Score, refs);
@@ -250,112 +420,83 @@ namespace JianpuEditor.ViewModels
 
             if (mergedCount == 0)
             {
-                return PublishEdit("无法合并：配对音符不相邻、时值相差超过 2 倍或类型不兼容");
+                return BuildEditResult("无法合并：配对音符不相邻、时值相差超过 2 倍或类型不兼容");
             }
 
-            var result = PublishEdit(mergedCount > 1
-                ? "已合并 " + mergedCount + " 对音符"
-                : "已合并选中音符");
-            result.SelectNoteMeasureIndex = selectMeasureIndex;
-            result.SelectNoteIndex = selectNoteIndex;
-            return result;
+            return BuildEditResult(
+                mergedCount > 1 ? "已合并 " + mergedCount + " 对音符" : "已合并选中音符",
+                selectMeasureIndex,
+                selectNoteIndex);
         }
 
-        public ScoreEditResult TransposePitch(int delta)
+        private ScoreEditResult ExecuteCommand(INoteEditCommand command)
         {
-            var selectedNotes = GetSelectedNotes();
-            if (selectedNotes.Count > 0)
-            {
-                var changedCount = 0;
-                foreach (var selected in selectedNotes)
-                {
-                    if (JianpuPitchService.TryTranspose(selected, delta))
-                    {
-                        changedCount++;
-                    }
-                }
-
-                if (changedCount == 0)
-                {
-                    return PublishEdit(delta > 0 ? "已达最高音" : "已达最低音");
-                }
-
-                var direction = delta > 0 ? "升" : "降";
-                return PublishEdit(changedCount > 1
-                    ? "已" + direction + "key " + changedCount + " 个选中音符"
-                    : "已" + direction + "key选中音符");
-            }
-
-            if (!JianpuPitchService.TryTranspose(_pendingNote, delta))
-            {
-                _messenger.Send(new StatusChangedMessage(delta > 0 ? "下一音符已达最高音" : "下一音符已达最低音"));
-                return ScoreEditResult.Unchanged;
-            }
-
-            _messenger.Send(new StatusChangedMessage(
-                "下一音符音高: " + _pendingNote.Pitch +
-                (_pendingNote.Octave > 0 ? "·" : _pendingNote.Octave < 0 ? ".." : string.Empty)));
-            return ScoreEditResult.Unchanged;
+            _history.Execute(command);
+            return command.Result ?? ScoreEditResult.Unchanged;
         }
 
-        private ScoreEditResult StepDuration(int delta)
+        private bool CanSplitAny(IReadOnlyList<ScoreNoteRef> refs)
         {
-            var selectedNotes = GetSelectedNotes();
-            if (selectedNotes.Count > 0)
+            for (var i = 0; i < refs.Count; i++)
             {
-                var tier = GetDurationTier(selectedNotes[0]);
-                var nextTier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, tier + delta));
-                if (nextTier == tier)
+                var noteRef = refs[i];
+                if (noteRef.MeasureIndex < 0 || noteRef.MeasureIndex >= _document.Score.Measures.Count)
                 {
-                    var limit = delta > 0 ? "已达最长时值" : "已达最短时值";
-                    return PublishEdit(limit + "（" + GetDurationTierLabel(tier) + "）");
+                    continue;
                 }
 
-                foreach (var selected in selectedNotes)
+                var measure = _document.Score.Measures[noteRef.MeasureIndex];
+                if (noteRef.NoteIndex < 0 || noteRef.NoteIndex >= measure.MelodyNotes.Count)
                 {
-                    ApplyDurationTier(selected, nextTier);
+                    continue;
                 }
 
-                return PublishEdit(selectedNotes.Count > 1
-                    ? "时值: " + GetDurationTierLabel(nextTier) + "（" + selectedNotes.Count + " 个音符）"
-                    : "时值: " + GetDurationTierLabel(nextTier));
+                if (NoteSplitMergeService.TrySplitNote(measure.MelodyNotes[noteRef.NoteIndex], out _))
+                {
+                    return true;
+                }
             }
 
-            var pendingTier = GetDurationTier(_pendingNote);
-            var nextPendingTier = Math.Max(MinDurationTier, Math.Min(MaxDurationTier, pendingTier + delta));
-            ApplyDurationTier(_pendingNote, nextPendingTier);
-            _messenger.Send(new StatusChangedMessage("下一音符时值: " + GetDurationTierLabel(nextPendingTier)));
-            return ScoreEditResult.Unchanged;
+            return false;
         }
 
-        public void ResetPendingModifiers()
+        private static int CountTransposableNotes(IReadOnlyList<JianpuNote> notes, int delta)
         {
-            _pendingNote = CreateDefaultNote();
+            var changedCount = 0;
+            for (var i = 0; i < notes.Count; i++)
+            {
+                var selected = notes[i];
+                if (selected.Type == NoteType.Rest)
+                {
+                    continue;
+                }
+
+                if (JianpuPitchService.TryGetTransposedPitch(
+                        selected.Pitch,
+                        selected.Octave,
+                        delta,
+                        out _,
+                        out _))
+                {
+                    changedCount++;
+                }
+            }
+
+            return changedCount;
         }
 
-        private ScoreEditResult InsertMelodyNote(JianpuNote note, string message)
+        private static ScoreEditResult BuildEditResult(
+            string message,
+            int? selectMeasureIndex = null,
+            int? selectNoteIndex = null)
         {
-            _document.EnsureMeasures();
-            var measureIndex = Math.Max(0, _selection.MeasureIndex);
-            var measure = _document.Score.Measures[measureIndex];
-            int insertIndex;
-
-            if (_selection.HasGapSelected)
+            return new ScoreEditResult
             {
-                insertIndex = _selection.InsertIndex;
-            }
-            else
-            {
-                insertIndex = measure.MelodyNotes.Count;
-            }
-
-            measure.MelodyNotes.Insert(insertIndex, note);
-            ResetPendingModifiers();
-
-            var result = PublishEdit(message);
-            result.SelectNoteMeasureIndex = measureIndex;
-            result.SelectNoteIndex = insertIndex;
-            return result;
+                Changed = true,
+                Message = message,
+                SelectNoteMeasureIndex = selectMeasureIndex,
+                SelectNoteIndex = selectNoteIndex
+            };
         }
 
         private List<ScoreNoteRef> GetSelectedNoteRefs()
