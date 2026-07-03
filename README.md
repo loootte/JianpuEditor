@@ -57,7 +57,8 @@
 
 - Windows
 - [.NET Framework 4.7.2](https://dotnet.microsoft.com/download/dotnet-framework/net472) 或更高
-- .NET SDK（用于编译）
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)（用于单元测试；仓库根目录 `global.json` 指定版本）
+- Rider 运行测试需安装 **.NET 8 x86 运行时**（Rider 内置 32 位 Test Runner 使用 `Program Files (x86)\dotnet`）
 - 播放功能需要系统可用的 MIDI 合成器（如 Microsoft GS Wavetable Synth）
 
 ## 构建与运行
