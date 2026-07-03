@@ -99,7 +99,7 @@ namespace JianpuEditor.Services
             }
         }
 
-        public void Stop()
+        public void StopPlayback()
         {
             AppLog.Info("停止播放: positionQuarter=" + PositionQuarter.ToString("0.###"));
             StopInternal(resetPosition: false);

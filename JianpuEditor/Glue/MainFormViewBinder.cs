@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
+using JianpuEditor.Rendering;
 using JianpuEditor.ViewModels;
 
 namespace JianpuEditor.Glue
@@ -279,8 +280,8 @@ namespace JianpuEditor.Glue
             }
 
             _tieButton.BackColor = _viewModel.TieEditor.IsTieModeActive
-                ? Color.FromArgb(255, 255, 200)
-                : SystemColors.Control;
+                ? AppTheme.TieModeButtonBackground
+                : AppTheme.IsDarkMode ? Color.FromArgb(58, 58, 64) : SystemColors.Control;
         }
 
         private void UpdatePlaybackButtons()

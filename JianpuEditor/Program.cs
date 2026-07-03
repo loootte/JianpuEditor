@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Windows.Forms;
+using JianpuEditor.Rendering;
 using JianpuEditor.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,6 +18,7 @@ namespace JianpuEditor
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            AppTheme.Load();
 
             var services = AppBootstrapper.ConfigureServices();
             Application.Run(services.GetRequiredService<MainForm>());

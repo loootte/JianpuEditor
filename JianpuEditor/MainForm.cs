@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using JianpuEditor.Controls;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Glue;
+using JianpuEditor.Rendering;
 using JianpuEditor.Services;
 using JianpuEditor.ViewModels;
 
@@ -31,6 +32,7 @@ namespace JianpuEditor
         private Button _playButton;
         private Button _stopButton;
         private ContextMenuStrip _sampleLibraryMenu;
+        private ToolStripMenuItem _darkModeMenuItem;
 
         public MainForm(MainViewModel viewModel, IAppMessenger messenger)
         {
@@ -92,6 +94,7 @@ namespace JianpuEditor
             _binder.SyncHeaderFromDocument();
             _binder.SyncFromViewModels();
             _viewModel.SetStatus("就绪 - 点击音符修改，副旋律行可添加/拖动和弦标识，点击歌词行编辑文字");
+            WinFormsThemeApplier.Apply(this, _canvas);
         }
 
         private void BuildMenu()
@@ -121,8 +124,18 @@ namespace JianpuEditor
             editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
             editMenu.DropDownItems.Add(CreateMenuItem("清空谱面", Keys.None, OnClearScore));
 
+            var viewMenu = new ToolStripMenuItem("视图");
+            _darkModeMenuItem = new ToolStripMenuItem("深色模式")
+            {
+                CheckOnClick = true,
+                Checked = AppTheme.IsDarkMode
+            };
+            _darkModeMenuItem.CheckedChanged += OnDarkModeToggled;
+            viewMenu.DropDownItems.Add(_darkModeMenuItem);
+
             menu.Items.Add(fileMenu);
             menu.Items.Add(editMenu);
+            menu.Items.Add(viewMenu);
             MainMenuStrip = menu;
         }
 
@@ -298,9 +311,16 @@ namespace JianpuEditor
             {
                 Width = 2,
                 Height = 30,
-                BackColor = Color.LightGray,
+                BackColor = AppTheme.Separator,
                 Margin = new Padding(8, 8, 8, 8)
             };
+        }
+
+        private void OnDarkModeToggled(object sender, EventArgs e)
+        {
+            AppTheme.SetDarkMode(_darkModeMenuItem.Checked);
+            WinFormsThemeApplier.Apply(this, _canvas);
+            _binder.SyncFromViewModels();
         }
 
         private static ToolStripMenuItem CreateMenuItem(string text, Keys shortcut, EventHandler handler)
@@ -437,7 +457,7 @@ namespace JianpuEditor
 
         private void OnCanvasChordMarkersChanged(object sender, EventArgs e)
         {
-            _viewModel.Document.MarkDirty();
+            _viewModel.NotifyScoreEdited("已更新和弦标识", markDirty: true);
             _viewModel.ChordEditor.SyncFromSelection();
             _binder.SyncMeasureTextBoxes();
         }

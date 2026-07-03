@@ -108,6 +108,7 @@ git push origin v1.0.1
 | 播放 / 停止 | 按 BPM 播放谱面；拖动蓝色进度条可跳转 |
 | 转调 | 工具栏「转调」或菜单「和弦转调...」；仅转调和弦标识 |
 | 导出 PDF / MIDI | 菜单或工具栏导出 |
+| 深色模式 | 菜单 **视图 → 深色模式**（设置会保存到本地，PDF 导出仍为浅色纸面） |
 
 启动后自动加载《欢乐颂》示例曲谱。`sample/` 目录提供更多示例（如《卡农》），可通过 **文件 → 示例曲库** 或工具栏 **曲库** 加载。
 
@@ -160,23 +161,48 @@ git push origin v1.0.1
 
 播放或 MIDI 相关出错时，错误弹窗会提示上述日志路径。
 
+## 架构（MVVM）
+
+本项目采用 **CommunityToolkit.Mvvm** + **Microsoft.Extensions.DependencyInjection**，将 WinForms 界面与编辑逻辑分离：
+
+| 层次 | 目录 | 职责 |
+|------|------|------|
+| **View** | `MainForm.cs`、`Controls/` | 菜单、工具栏、对话框；仅处理 WinForms 与文件选择 |
+| **Glue** | `Glue/` | `MainFormViewBinder`（控件 ↔ ViewModel 双向绑定）、`ScoreCanvasGlue`（画布刷新与选择同步）、`ScoreSelectionMapper` |
+| **ViewModel** | `ViewModels/` | 编辑命令、谱面状态、选择协调；通过 `IAppMessenger` 发布 `ScoreEditedMessage` 等 |
+| **Model** | `Models/` | 纯 POCO：`JianpuScore`、小节、音符、和弦标识 |
+| **Core** | `Core/Abstractions/`、`Core/Messaging/` | 服务接口（`IScoreFileService`、`IPdfExportService` 等）与消息总线 |
+| **Services** | `Services/` | 静态业务实现 + DI 适配器（`PdfExportServiceAdapter` 等） |
+| **Rendering** | `Rendering/` | 布局、绘制、`AppTheme`（浅色/深色主题） |
+
+**数据流**：用户操作 → `MainForm` 调用 ViewModel 方法 → 返回 `ScoreEditResult` → `ScoreCanvasGlue` 更新画布 → `MainFormViewBinder` 同步控件。
+
+**依赖注入**（`AppBootstrapper.cs`）：所有 ViewModel 与 Service 接口注册为 Singleton，`MainForm` 为 Transient。
+
 ## 项目结构
 
 ```
 JianpuEditor/
-  MainForm.cs              # 主界面、工具栏、菜单
+  Program.cs               # 启动、DI 容器、主题加载
+  AppBootstrapper.cs       # 服务与 ViewModel 注册
+  MainForm.cs              # 主界面（瘦 View 层）
+  Glue/                    # View ↔ ViewModel 胶水层
+  ViewModels/              # MVVM ViewModel（10 个）
+  Core/                    # 接口抽象与消息
   Controls/ScoreCanvas.cs  # 画布、选择、播放进度条、和弦内联编辑
   Models/                  # 曲谱、小节、音符、连音线、和弦标识
-  Rendering/               # 布局、绘制、播放位置映射
+  Rendering/               # 布局、绘制、AppTheme
   Services/                # JSON/PDF/MIDI、播放、和弦解析/转调、连音线维护
   installer/               # Inno Setup 安装脚本
   scripts/                 # 构建与测试脚本
   sample/                  # 示例曲库（.jianpu / .json）
-JianpuEditor.Tests/        # xUnit 单元测试（核心服务与模型）
+JianpuEditor.Tests/        # xUnit 单元测试（服务、ViewModel、Glue）
 ```
 
 ## 依赖
 
+- [CommunityToolkit.Mvvm](https://www.nuget.org/packages/CommunityToolkit.Mvvm) 8.4.0
+- [Microsoft.Extensions.DependencyInjection](https://www.nuget.org/packages/Microsoft.Extensions.DependencyInjection) 8.0.1
 - [Newtonsoft.Json](https://www.nuget.org/packages/Newtonsoft.Json) 13.0.3
 - [PDFsharp](https://www.nuget.org/packages/PDFsharp) 6.2.0
 

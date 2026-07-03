@@ -92,7 +92,7 @@ namespace JianpuEditor.ViewModels
 
         public void Stop()
         {
-            _playbackService.Stop();
+            _playbackService.StopPlayback();
             IsPlaying = false;
             _messenger.Send(new StatusChangedMessage("播放已停止"));
         }

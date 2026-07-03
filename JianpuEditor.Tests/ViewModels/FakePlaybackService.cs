@@ -31,7 +31,7 @@ namespace JianpuEditor.Tests.ViewModels
             IsPlaying = true;
         }
 
-        public void Stop()
+        public void StopPlayback()
         {
             IsPlaying = false;
         }

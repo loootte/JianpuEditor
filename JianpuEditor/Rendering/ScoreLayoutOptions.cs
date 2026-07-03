@@ -19,7 +19,8 @@ namespace JianpuEditor.Rendering
             TitleFontSize = 36f,
             MetaFontSize = 18f,
             HeaderMetaLeftAligned = true,
-            ChordMarkersTextOnly = true
+            ChordMarkersTextOnly = true,
+            RespectAppTheme = false
         };
 
         public const int PdfRenderWidth = 1280;
@@ -45,5 +46,8 @@ namespace JianpuEditor.Rendering
 
         /// <summary>编辑界面：显示拍位网格、提示，以及选中态的操作标记。</summary>
         public bool ShowChordEditorAffordances { get; set; }
+
+        /// <summary>为 false 时（如 PDF 导出）始终使用浅色纸面。</summary>
+        public bool RespectAppTheme { get; set; } = true;
     }
 }

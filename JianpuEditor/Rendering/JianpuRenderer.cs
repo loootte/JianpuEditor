@@ -31,6 +31,29 @@ namespace JianpuEditor.Rendering
         private readonly Font _noteFont = new Font("Arial", 26f, FontStyle.Bold);
         private readonly Font _secondaryFont = new Font("Arial", 20f, FontStyle.Bold);
         private bool _disposed;
+        private ScoreLayoutOptions _activeLayoutOptions;
+
+        private Color InkColor
+        {
+            get
+            {
+                return _activeLayoutOptions != null
+                       && _activeLayoutOptions.RespectAppTheme
+                       && AppTheme.IsDarkMode
+                    ? AppTheme.PrimaryText
+                    : Color.Black;
+            }
+        }
+
+        private Brush CreateInkBrush()
+        {
+            return new SolidBrush(InkColor);
+        }
+
+        private Pen CreateInkPen(float width)
+        {
+            return new Pen(InkColor, width);
+        }
 
         public void Dispose()
         {
@@ -108,9 +131,9 @@ namespace JianpuEditor.Rendering
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            graphics.Clear(Color.White);
-
             layoutOptions = layoutOptions ?? ScoreLayoutOptions.Default;
+            _activeLayoutOptions = layoutOptions;
+            graphics.Clear(AppTheme.GetScoreBackground(layoutOptions.RespectAppTheme));
             var layout = BuildLayout(score, width, layoutOptions);
             DrawHeader(graphics, score, width, layoutOptions);
             DrawRowLabels(graphics, layout);
@@ -126,6 +149,7 @@ namespace JianpuEditor.Rendering
                 selectedChordMeasureIndex,
                 selectedChordMarkerIndex,
                 layoutOptions);
+            _activeLayoutOptions = null;
         }
 
         public static double GetDurationUnits(JianpuNote note)
@@ -404,7 +428,10 @@ namespace JianpuEditor.Rendering
             {
                 var titleTop = 20f;
                 var titleSize = g.MeasureString(title, titleFont);
-                g.DrawString(title, titleFont, Brushes.Black, (width - titleSize.Width) / 2f, titleTop);
+                using (var ink = CreateInkBrush())
+                {
+                    g.DrawString(title, titleFont, ink, (width - titleSize.Width) / 2f, titleTop);
+                }
 
                 var bpm = score.Bpm > 0 ? score.Bpm : 120;
                 var meta = string.Format(
@@ -421,7 +448,10 @@ namespace JianpuEditor.Rendering
                 var metaX = options.HeaderMetaLeftAligned
                     ? (float)MarginLeft
                     : (width - g.MeasureString(meta, metaFont).Width) / 2f;
-                g.DrawString(meta, metaFont, Brushes.DimGray, metaX, metaTop);
+                using (var metaBrush = new SolidBrush(AppTheme.SecondaryText))
+                {
+                    g.DrawString(meta, metaFont, metaBrush, metaX, metaTop);
+                }
             }
         }
 
@@ -573,7 +603,7 @@ namespace JianpuEditor.Rendering
                     }
                 }
 
-                var color = isSelected ? Color.FromArgb(255, 41, 98, 255) : Color.Black;
+                var color = isSelected ? AppTheme.TieActive : AppTheme.TieInactive;
                 var width = isSelected ? 3f : 2f;
                 using (var pen = new Pen(color, width))
                 {
@@ -1067,13 +1097,16 @@ namespace JianpuEditor.Rendering
                 return;
             }
 
-            g.DrawString(displayText, _secondaryFont, Brushes.Black, bounds.AnchorX, y);
+            using (var brush = new SolidBrush(AppTheme.PrimaryText))
+            {
+                g.DrawString(displayText, _secondaryFont, brush, bounds.AnchorX, y);
+            }
         }
 
         private void DrawChordMarkerChrome(Graphics g, ChordMarkerBounds bounds, string text, bool isSelected)
         {
-            var backColor = isSelected ? Color.FromArgb(255, 255, 240) : Color.FromArgb(248, 248, 252);
-            var borderColor = isSelected ? Color.FromArgb(220, 41, 98, 255) : Color.FromArgb(180, 160, 174, 192);
+            var backColor = isSelected ? AppTheme.ChordSelectedBackground : AppTheme.ChordBackground;
+            var borderColor = isSelected ? AppTheme.ChordSelectedBorder : AppTheme.ChordBorder;
 
             using (var backBrush = new SolidBrush(backColor))
             using (var borderPen = new Pen(borderColor, isSelected ? 2f : 1f))
@@ -1090,24 +1123,29 @@ namespace JianpuEditor.Rendering
             using (var deleteFont = new Font("Arial", 10f, FontStyle.Bold))
             using (var textFont = _secondaryFont)
             {
-                g.DrawString("::", handleFont, Brushes.DimGray, bounds.DragHandleBounds.Left + 1, bounds.DragHandleBounds.Top + 4);
-                g.DrawString("x", deleteFont, Brushes.IndianRed, bounds.DeleteBounds.Left + 4, bounds.DeleteBounds.Top + 2);
-                if (!string.IsNullOrWhiteSpace(text))
+                using (var handleBrush = new SolidBrush(AppTheme.SecondaryText))
+                using (var deleteBrush = new SolidBrush(Color.IndianRed))
+                using (var textBrush = new SolidBrush(AppTheme.PrimaryText))
                 {
-                    var textRect = new RectangleF(
-                        bounds.TextBoxBounds.Left + 4,
-                        bounds.TextBoxBounds.Top,
-                        bounds.TextBoxBounds.Width - 8,
-                        bounds.TextBoxBounds.Height);
-                    using (var format = new StringFormat
+                    g.DrawString("::", handleFont, handleBrush, bounds.DragHandleBounds.Left + 1, bounds.DragHandleBounds.Top + 4);
+                    g.DrawString("x", deleteFont, deleteBrush, bounds.DeleteBounds.Left + 4, bounds.DeleteBounds.Top + 2);
+                    if (!string.IsNullOrWhiteSpace(text))
                     {
-                        Alignment = StringAlignment.Near,
-                        LineAlignment = StringAlignment.Center,
-                        Trimming = StringTrimming.EllipsisCharacter,
-                        FormatFlags = StringFormatFlags.NoWrap
-                    })
-                    {
-                        g.DrawString(text.Trim(), textFont, Brushes.Black, textRect, format);
+                        var textRect = new RectangleF(
+                            bounds.TextBoxBounds.Left + 4,
+                            bounds.TextBoxBounds.Top,
+                            bounds.TextBoxBounds.Width - 8,
+                            bounds.TextBoxBounds.Height);
+                        using (var format = new StringFormat
+                        {
+                            Alignment = StringAlignment.Near,
+                            LineAlignment = StringAlignment.Center,
+                            Trimming = StringTrimming.EllipsisCharacter,
+                            FormatFlags = StringFormatFlags.NoWrap
+                        })
+                        {
+                            g.DrawString(text.Trim(), textFont, textBrush, textRect, format);
+                        }
                     }
                 }
             }
@@ -1129,7 +1167,7 @@ namespace JianpuEditor.Rendering
             }
         }
 
-        private static void DrawTextRowCore(
+        private void DrawTextRowCore(
             Graphics g,
             string text,
             Rectangle bounds,
@@ -1160,7 +1198,10 @@ namespace JianpuEditor.Rendering
                 FormatFlags = StringFormatFlags.NoWrap
             })
             {
-                g.DrawString(text, font, Brushes.Black, rect, format);
+                using (var ink = CreateInkBrush())
+                {
+                    g.DrawString(text, font, ink, rect, format);
+                }
             }
         }
 
@@ -1185,53 +1226,60 @@ namespace JianpuEditor.Rendering
             var textSize = g.MeasureString(text, _noteFont);
             var textX = x + (headWidth - textSize.Width) / 2f;
             var textY = y + 18f;
-            g.DrawString(text, _noteFont, Brushes.Black, textX, textY);
-
-            var headCenterX = x + headWidth / 2f;
-
-            if (note.Octave > 0)
+            using (var ink = CreateInkBrush())
+            using (var inkPen = CreateInkPen(2f))
             {
-                for (var i = 0; i < note.Octave; i++)
+                g.DrawString(text, _noteFont, ink, textX, textY);
+
+                var headCenterX = x + headWidth / 2f;
+
+                if (note.Octave > 0)
                 {
-                    g.FillEllipse(Brushes.Black, headCenterX - 3, y + 4 + i * 10, 6, 6);
+                    for (var i = 0; i < note.Octave; i++)
+                    {
+                        g.FillEllipse(ink, headCenterX - 3, y + 4 + i * 10, 6, 6);
+                    }
                 }
-            }
-            else if (note.Octave < 0)
-            {
-                for (var i = 0; i < Math.Abs(note.Octave); i++)
+                else if (note.Octave < 0)
                 {
-                    g.FillEllipse(Brushes.Black, headCenterX - 3, y + 52 + i * 10, 6, 6);
+                    for (var i = 0; i < Math.Abs(note.Octave); i++)
+                    {
+                        g.FillEllipse(ink, headCenterX - 3, y + 52 + i * 10, 6, 6);
+                    }
                 }
-            }
 
-            if (note.Dotted)
-            {
-                var dotX = Math.Min(x + headWidth - 8, headCenterX + 12);
-                g.FillEllipse(Brushes.Black, dotX, y + 42, 5, 5);
-            }
-
-            var extensionWidth = noteWidth - headWidth;
-            if (extensionWidth > 0 && note.Dashes > 0)
-            {
-                for (var i = 0; i < note.Dashes; i++)
+                if (note.Dotted)
                 {
-                    var dashX = x + headWidth + (extensionWidth * (i + 1)) / (note.Dashes + 1) - 4;
-                    g.DrawLine(Pens.Black, dashX, y + 36, dashX + 8, y + 36);
+                    var dotX = Math.Min(x + headWidth - 8, headCenterX + 12);
+                    g.FillEllipse(ink, dotX, y + 42, 5, 5);
                 }
-            }
-            else
-            {
-                for (var i = 0; i < note.Dashes; i++)
+
+                var extensionWidth = noteWidth - headWidth;
+                if (extensionWidth > 0 && note.Dashes > 0)
                 {
-                    var dashX = x + headWidth - 8 + i * 12;
-                    g.DrawLine(Pens.Black, dashX, y + 36, dashX + 8, y + 36);
+                    for (var i = 0; i < note.Dashes; i++)
+                    {
+                        var dashX = x + headWidth + (extensionWidth * (i + 1)) / (note.Dashes + 1) - 4;
+                        g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
+                    }
+                }
+                else
+                {
+                    for (var i = 0; i < note.Dashes; i++)
+                    {
+                        var dashX = x + headWidth - 8 + i * 12;
+                        g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
+                    }
                 }
             }
         }
 
-        private static void DrawBarLine(Graphics g, int x, int top, int height)
+        private void DrawBarLine(Graphics g, int x, int top, int height)
         {
-            g.DrawLine(new Pen(Color.Black, 2f), x, top + 4, x, top + height - 4);
+            using (var pen = CreateInkPen(2f))
+            {
+                g.DrawLine(pen, x, top + 4, x, top + height - 4);
+            }
         }
 
         private static int GetMarginTop(ScoreLayoutOptions options)

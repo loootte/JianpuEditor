@@ -98,6 +98,14 @@ namespace JianpuEditor.Controls
             _contentPanel.MouseMove += OnContentMouseMove;
             _contentPanel.MouseUp += OnContentMouseUp;
             Controls.Add(_contentPanel);
+            AppTheme.ThemeChanged += OnThemeChanged;
+        }
+
+        public void ApplyTheme()
+        {
+            BackColor = AppTheme.CanvasChrome;
+            _contentPanel.BackColor = AppTheme.ScorePaper;
+            RefreshScore();
         }
 
         public event EventHandler<ScoreSelectionChangedEventArgs> SelectionChanged;
@@ -862,7 +870,8 @@ namespace JianpuEditor.Controls
                 Text = text ?? string.Empty,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = _inlineTextFont,
-                BackColor = Color.FromArgb(255, 255, 240)
+                BackColor = AppTheme.InlineEditorBackground,
+                ForeColor = AppTheme.PrimaryText
             };
             _inlineEditor.KeyDown += OnInlineEditorKeyDown;
             _inlineEditor.LostFocus += OnInlineEditorLostFocus;
@@ -1116,8 +1125,8 @@ namespace JianpuEditor.Controls
                 Text = marker.Text ?? string.Empty,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Arial", 11f, FontStyle.Bold),
-                BackColor = Color.FromArgb(255, 255, 240),
-                ForeColor = Color.Black
+                BackColor = AppTheme.InlineEditorBackground,
+                ForeColor = AppTheme.PrimaryText
             };
             _chordInlineEditor.KeyDown += OnChordInlineEditorKeyDown;
             _chordInlineEditor.LostFocus += OnChordInlineEditorLostFocus;
@@ -1296,10 +1305,16 @@ namespace JianpuEditor.Controls
             }
         }
 
+        private void OnThemeChanged()
+        {
+            ApplyTheme();
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                AppTheme.ThemeChanged -= OnThemeChanged;
                 _inlineEditor?.Dispose();
                 _chordInlineEditor?.Dispose();
                 _scoreBitmap?.Dispose();

@@ -21,7 +21,7 @@ namespace JianpuEditor.Core.Abstractions
 
         void Play(JianpuScore score, int bpm, double startQuarter = 0);
 
-        void Stop();
+        void StopPlayback();
 
         void Seek(double quarterBeat);
     }
