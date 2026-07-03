@@ -1,6 +1,6 @@
 #define MyAppName "简谱编辑器"
 #define MyAppNameEn "JianpuEditor"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "loootte"
 #define MyAppExeName "JianpuEditor.exe"
 #define MyAppUrl "https://github.com/loootte/JianpuEditor"

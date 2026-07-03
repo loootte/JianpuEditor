@@ -87,7 +87,7 @@ dotnet build JianpuEditor.sln -c Release
 .\scripts\build-installer.ps1
 ```
 
-输出文件：`installer/output/JianpuEditor-Setup-1.1.0.exe`
+输出文件：`installer/output/JianpuEditor-Setup-1.2.0.exe`
 
 ## CI/CD
 
@@ -101,8 +101,8 @@ GitHub Actions 工作流位于 `.github/workflows/`：
 ### 发布新版本
 
 ```powershell
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 也可在 GitHub **Actions → Release → Run workflow** 中手动指定版本号，仅生成安装包 artifact（不创建 Release）。
