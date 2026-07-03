@@ -17,7 +17,7 @@ namespace JianpuEditor.Tests.ViewModels
             };
             selection.UpdateFrom(new ScoreSelectionInfo { TieIndex = 0 });
             var navigation = new MeasureNavigationViewModel(document, selection, messenger);
-            var chordEditor = new ChordEditorViewModel(document, selection, messenger);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger);
             var editor = new ScoreEditorViewModel(document, selection, navigation, chordEditor, messenger);
 
             var result = editor.Delete();
@@ -34,7 +34,7 @@ namespace JianpuEditor.Tests.ViewModels
             document.Score.Measures[0].MelodyNotes.Add(new JianpuNote { Pitch = 3 });
             selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
             var navigation = new MeasureNavigationViewModel(document, selection, messenger);
-            var chordEditor = new ChordEditorViewModel(document, selection, messenger);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger);
             var editor = new ScoreEditorViewModel(document, selection, navigation, chordEditor, messenger);
 
             var result = editor.Delete();

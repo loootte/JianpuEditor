@@ -10,7 +10,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void Title_ChangeMarksDocumentDirty()
         {
-            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), new AppMessenger());
+            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), ViewModelTestHelper.CreateMessenger());
 
             viewModel.Title = "Test Title";
 
@@ -21,7 +21,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void ResetAsNew_ClearsDirtyState()
         {
-            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), new AppMessenger());
+            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), ViewModelTestHelper.CreateMessenger());
             viewModel.Title = "Dirty";
 
             viewModel.ResetAsNew();
@@ -33,7 +33,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void LoadDemoScore_LoadsOdeToJoyWithoutDirtyFlag()
         {
-            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), new AppMessenger());
+            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), ViewModelTestHelper.CreateMessenger());
 
             viewModel.LoadDemoScore();
 
@@ -45,7 +45,7 @@ namespace JianpuEditor.Tests.ViewModels
         [Fact]
         public void EnsureMeasures_CreatesDefaultMeasureWhenEmpty()
         {
-            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), new AppMessenger());
+            var viewModel = new ScoreDocumentViewModel(new ScoreFileServiceAdapter(), ViewModelTestHelper.CreateMessenger());
             viewModel.Score.Measures.Clear();
 
             viewModel.EnsureMeasures();

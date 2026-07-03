@@ -1,6 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
@@ -12,6 +13,7 @@ namespace JianpuEditor.ViewModels
     {
         private readonly ScoreDocumentViewModel _document;
         private readonly ScoreSelectionViewModel _selection;
+        private readonly IChordTransposeService _chordTransposeService;
         private readonly IAppMessenger _messenger;
         private string _selectedChordText = string.Empty;
         private bool _isChordEditorEnabled;
@@ -20,10 +22,12 @@ namespace JianpuEditor.ViewModels
         public ChordEditorViewModel(
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
+            IChordTransposeService chordTransposeService,
             IAppMessenger messenger)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
             _selection = selection ?? throw new ArgumentNullException(nameof(selection));
+            _chordTransposeService = chordTransposeService ?? throw new ArgumentNullException(nameof(chordTransposeService));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             AddChordMarkerCommand = new RelayCommand(() => AddChordMarker());
             TransposeChordsCommand = new RelayCommand<string>(
@@ -190,7 +194,7 @@ namespace JianpuEditor.ViewModels
                 return ScoreEditResult.Unchanged;
             }
 
-            if (!ChordTransposeService.TryTransposeChords(
+            if (!_chordTransposeService.TryTransposeChords(
                     _document.Score,
                     targetKey.Trim(),
                     out var errorMessage,

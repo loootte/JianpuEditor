@@ -10,7 +10,7 @@ namespace JianpuEditor.Tests.ViewModels
         public void AddChordMarker_AddsMarkerToCurrentMeasure()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var chordEditor = new ChordEditorViewModel(document, selection, messenger);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger);
             document.EnsureMeasures();
             selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0 });
 
@@ -24,7 +24,8 @@ namespace JianpuEditor.Tests.ViewModels
         public void TransposeChords_UpdatesKeySignature()
         {
             var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
-            var chordEditor = new ChordEditorViewModel(document, selection, messenger);
+            var transpose = new FakeChordTransposeService();
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger, transpose);
             document.EnsureMeasures();
             document.KeySignature = "1=C";
             document.Score.Measures[0].ChordMarkers.Add(new ChordMarker { Text = "C", BeatPosition = 0 });
@@ -33,6 +34,22 @@ namespace JianpuEditor.Tests.ViewModels
 
             Assert.True(result.Changed);
             Assert.Equal("1=G", document.KeySignature);
+        }
+
+        [Fact]
+        public void TransposeChords_ReturnsErrorWhenServiceFails()
+        {
+            var (document, selection, messenger) = ViewModelTestHelper.CreateDocumentWithSelection();
+            var transpose = new FakeChordTransposeService { ShouldSucceed = false, ErrorMessage = "无效调号" };
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, messenger, transpose);
+            document.EnsureMeasures();
+            document.KeySignature = "1=C";
+
+            var result = chordEditor.TransposeChords("1=Z");
+
+            Assert.False(result.Changed);
+            Assert.Equal("无效调号", result.Message);
+            Assert.Equal("1=C", document.KeySignature);
         }
     }
 }

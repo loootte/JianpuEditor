@@ -1,15 +1,17 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Models;
-using JianpuEditor.Services;
 
 namespace JianpuEditor.ViewModels
 {
     public sealed class MainViewModel : ObservableObject, IDisposable
     {
+        private readonly IPdfExportService _pdfExportService;
+        private readonly IMidiExportService _midiExportService;
         private readonly IAppMessenger _messenger;
         private string _statusMessage = "就绪";
 
@@ -24,6 +26,8 @@ namespace JianpuEditor.ViewModels
             ScoreEditorViewModel scoreEditor,
             PlaybackViewModel playback,
             SampleLibraryViewModel sampleLibrary,
+            IPdfExportService pdfExportService,
+            IMidiExportService midiExportService,
             IAppMessenger messenger)
         {
             Document = document ?? throw new ArgumentNullException(nameof(document));
@@ -36,6 +40,8 @@ namespace JianpuEditor.ViewModels
             ScoreEditor = scoreEditor ?? throw new ArgumentNullException(nameof(scoreEditor));
             Playback = playback ?? throw new ArgumentNullException(nameof(playback));
             SampleLibrary = sampleLibrary ?? throw new ArgumentNullException(nameof(sampleLibrary));
+            _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
+            _midiExportService = midiExportService ?? throw new ArgumentNullException(nameof(midiExportService));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
 
             NewScoreCommand = new RelayCommand(NewScore);
@@ -161,7 +167,7 @@ namespace JianpuEditor.ViewModels
         {
             try
             {
-                PdfExportService.Export(Document.Score, filePath, renderWidth);
+                _pdfExportService.Export(Document.Score, filePath, renderWidth);
                 SetStatus("PDF 已导出: " + filePath);
                 return ScoreEditResult.WithMessage("PDF 已导出: " + filePath);
             }
@@ -176,7 +182,7 @@ namespace JianpuEditor.ViewModels
         {
             try
             {
-                MidiExportService.Export(Document.Score, filePath);
+                _midiExportService.Export(Document.Score, filePath);
                 SetStatus("MIDI 已导出: " + filePath);
                 return ScoreEditResult.WithMessage("MIDI 已导出: " + filePath);
             }

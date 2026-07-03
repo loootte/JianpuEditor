@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
 using JianpuEditor.Services;
@@ -12,12 +13,17 @@ namespace JianpuEditor.ViewModels
     public sealed class SampleLibraryViewModel : ObservableObject
     {
         private readonly ScoreDocumentViewModel _document;
+        private readonly ISampleLibraryService _sampleLibraryService;
         private readonly IAppMessenger _messenger;
         private IReadOnlyList<string> _samples = Array.Empty<string>();
 
-        public SampleLibraryViewModel(ScoreDocumentViewModel document, IAppMessenger messenger)
+        public SampleLibraryViewModel(
+            ScoreDocumentViewModel document,
+            ISampleLibraryService sampleLibraryService,
+            IAppMessenger messenger)
         {
             _document = document ?? throw new ArgumentNullException(nameof(document));
+            _sampleLibraryService = sampleLibraryService ?? throw new ArgumentNullException(nameof(sampleLibraryService));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             RefreshSamplesCommand = new RelayCommand(RefreshSamples);
             LoadDemoScoreCommand = new RelayCommand(() => LoadDemoScore());
@@ -46,7 +52,7 @@ namespace JianpuEditor.ViewModels
 
         public void RefreshSamples()
         {
-            Samples = SampleLibraryService.ListSampleFiles();
+            Samples = _sampleLibraryService.ListSampleFiles();
             OnPropertyChanged(nameof(HasSamples));
         }
 
@@ -70,7 +76,7 @@ namespace JianpuEditor.ViewModels
             try
             {
                 _document.LoadSample(path);
-                var displayName = SampleLibraryService.GetDisplayName(path);
+                var displayName = _sampleLibraryService.GetDisplayName(path);
                 var message = "已加载示例曲谱：" + _document.Score.Title;
                 _messenger.Send(new ScoreEditedMessage(message, markDirty: false));
                 _messenger.Send(new ScoreLoadedMessage(_document.Score, path));
@@ -91,7 +97,7 @@ namespace JianpuEditor.ViewModels
 
         public string GetDisplayName(string path)
         {
-            return SampleLibraryService.GetDisplayName(path);
+            return _sampleLibraryService.GetDisplayName(path);
         }
 
         public string BuildWindowTitle(string samplePath)
@@ -103,7 +109,7 @@ namespace JianpuEditor.ViewModels
 
             if (!string.IsNullOrWhiteSpace(samplePath))
             {
-                return "简谱编辑器 - " + SampleLibraryService.GetDisplayName(samplePath);
+                return "简谱编辑器 - " + _sampleLibraryService.GetDisplayName(samplePath);
             }
 
             return "简谱编辑器";
