@@ -31,6 +31,7 @@ namespace JianpuEditor
         private Button _tieButton;
         private Button _playButton;
         private Button _stopButton;
+        private MenuStrip _menuStrip;
         private ContextMenuStrip _sampleLibraryMenu;
         private ToolStripMenuItem _darkModeMenuItem;
 
@@ -48,10 +49,10 @@ namespace JianpuEditor
             KeyDown += OnFormKeyDown;
 
             BuildMenu();
-            BuildCanvas();
-            BuildFooter();
-            BuildToolbar();
             BuildHeader();
+            BuildToolbar();
+            BuildFooter();
+            BuildCanvas();
 
             _binder = new MainFormViewBinder(
                 _viewModel,
@@ -95,11 +96,17 @@ namespace JianpuEditor
             _binder.SyncFromViewModels();
             _viewModel.SetStatus("就绪 - 点击音符修改，副旋律行可添加/拖动和弦标识，点击歌词行编辑文字");
             WinFormsThemeApplier.Apply(this, _canvas);
+            _menuStrip?.BringToFront();
         }
 
         private void BuildMenu()
         {
-            var menu = new MenuStrip();
+            _menuStrip = new MenuStrip
+            {
+                Dock = DockStyle.Top,
+                Visible = true
+            };
+            var menu = _menuStrip;
 
             var fileMenu = new ToolStripMenuItem("文件");
             fileMenu.DropDownItems.Add(CreateMenuItem("新建", Keys.Control | Keys.N, (s, e) => OnNewScore(s, e)));
@@ -136,6 +143,7 @@ namespace JianpuEditor
             menu.Items.Add(fileMenu);
             menu.Items.Add(editMenu);
             menu.Items.Add(viewMenu);
+            Controls.Add(menu);
             MainMenuStrip = menu;
         }
 
@@ -320,6 +328,7 @@ namespace JianpuEditor
         {
             AppTheme.SetDarkMode(_darkModeMenuItem.Checked);
             WinFormsThemeApplier.Apply(this, _canvas);
+            _menuStrip?.BringToFront();
             _binder.SyncFromViewModels();
         }
 

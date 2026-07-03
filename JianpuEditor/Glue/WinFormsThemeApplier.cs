@@ -16,8 +16,30 @@ namespace JianpuEditor.Glue
 
             form.BackColor = AppTheme.FormBackground;
             form.ForeColor = AppTheme.FormForeground;
+            ApplyMenuStrip(form.MainMenuStrip);
             ApplyControlTree(form.Controls, canvas);
             form.Invalidate(true);
+        }
+
+        public static void ApplyMenuStrip(MenuStrip menuStrip)
+        {
+            if (menuStrip == null)
+            {
+                return;
+            }
+
+            menuStrip.Visible = true;
+            menuStrip.GripStyle = ToolStripGripStyle.Hidden;
+            if (AppTheme.IsDarkMode)
+            {
+                menuStrip.RenderMode = ToolStripRenderMode.Professional;
+                menuStrip.Renderer = new ToolStripProfessionalRenderer(new DarkToolStripColorTable());
+            }
+            else
+            {
+                menuStrip.RenderMode = ToolStripRenderMode.System;
+                menuStrip.Renderer = null;
+            }
         }
 
         private static void ApplyControlTree(Control.ControlCollection controls, ScoreCanvas canvas)
@@ -40,10 +62,9 @@ namespace JianpuEditor.Glue
                 return;
             }
 
-            if (control is MenuStrip || control is ToolStrip)
+            if (control is MenuStrip menuStrip)
             {
-                control.BackColor = AppTheme.FormBackground;
-                control.ForeColor = AppTheme.FormForeground;
+                ApplyMenuStrip(menuStrip);
                 return;
             }
 
@@ -72,6 +93,59 @@ namespace JianpuEditor.Glue
             if (control is Panel panel && panel.Width <= 4)
             {
                 panel.BackColor = AppTheme.Separator;
+            }
+        }
+
+        private sealed class DarkToolStripColorTable : ProfessionalColorTable
+        {
+            public override Color MenuStripGradientBegin
+            {
+                get { return AppTheme.FormBackground; }
+            }
+
+            public override Color MenuStripGradientEnd
+            {
+                get { return AppTheme.FormBackground; }
+            }
+
+            public override Color MenuItemSelected
+            {
+                get { return Color.FromArgb(70, 70, 78); }
+            }
+
+            public override Color MenuItemSelectedGradientBegin
+            {
+                get { return Color.FromArgb(70, 70, 78); }
+            }
+
+            public override Color MenuItemSelectedGradientEnd
+            {
+                get { return Color.FromArgb(70, 70, 78); }
+            }
+
+            public override Color MenuItemBorder
+            {
+                get { return Color.FromArgb(90, 90, 98); }
+            }
+
+            public override Color ToolStripDropDownBackground
+            {
+                get { return AppTheme.InputBackground; }
+            }
+
+            public override Color ImageMarginGradientBegin
+            {
+                get { return AppTheme.InputBackground; }
+            }
+
+            public override Color ImageMarginGradientMiddle
+            {
+                get { return AppTheme.InputBackground; }
+            }
+
+            public override Color ImageMarginGradientEnd
+            {
+                get { return AppTheme.InputBackground; }
             }
         }
     }
