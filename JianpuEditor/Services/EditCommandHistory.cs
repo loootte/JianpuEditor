@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using JianpuEditor.Core.Abstractions;
 using JianpuEditor.Core.Messaging;
 using JianpuEditor.Core.Messaging.Messages;
@@ -62,6 +63,7 @@ namespace JianpuEditor.Services
             command.Execute();
             PushUndo(command);
             _redoStack.Clear();
+            LogCommandStack("Execute", command.Description);
             OnHistoryChanged();
         }
 
@@ -69,12 +71,14 @@ namespace JianpuEditor.Services
         {
             if (_undoStack.Count == 0)
             {
+                LogCommandStack("Undo(skipped: empty stack)", null);
                 return;
             }
 
             var command = PopUndo();
             command.Undo();
             _redoStack.Add(command);
+            LogCommandStack("Undo", command.Description);
             OnHistoryChanged();
         }
 
@@ -82,12 +86,14 @@ namespace JianpuEditor.Services
         {
             if (_redoStack.Count == 0)
             {
+                LogCommandStack("Redo(skipped: empty stack)", null);
                 return;
             }
 
             var command = PopRedo();
             command.Execute();
             PushUndo(command);
+            LogCommandStack("Redo", command.Description);
             OnHistoryChanged();
         }
 
@@ -100,6 +106,7 @@ namespace JianpuEditor.Services
 
             _undoStack.Clear();
             _redoStack.Clear();
+            LogCommandStack("Clear", null);
             OnHistoryChanged();
         }
 
@@ -136,6 +143,55 @@ namespace JianpuEditor.Services
         private void OnHistoryChanged()
         {
             HistoryChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void LogCommandStack(string action, string commandDescription)
+        {
+            var line = EditCommandHistoryDebugFormatter.Format(action, commandDescription, _undoStack, _redoStack);
+            Console.WriteLine(line);
+            AppLog.Info(line);
+        }
+    }
+
+    internal static class EditCommandHistoryDebugFormatter
+    {
+        public static string Format(string action, string commandDescription, IReadOnlyList<IEditCommand> undoStack, IReadOnlyList<IEditCommand> redoStack)
+        {
+            var builder = new StringBuilder();
+            builder.Append("[CommandHistory] ");
+            builder.Append(action);
+            if (!string.IsNullOrEmpty(commandDescription))
+            {
+                builder.Append(" | cmd=");
+                builder.Append(commandDescription);
+            }
+
+            builder.Append(" | undo(");
+            builder.Append(undoStack.Count);
+            builder.Append("): ");
+            builder.Append(FormatStack(undoStack, "next"));
+            builder.Append(" | redo(");
+            builder.Append(redoStack.Count);
+            builder.Append("): ");
+            builder.Append(FormatStack(redoStack, "next redo"));
+            return builder.ToString();
+        }
+
+        private static string FormatStack(IReadOnlyList<IEditCommand> stack, string topMarker)
+        {
+            if (stack == null || stack.Count == 0)
+            {
+                return "(empty)";
+            }
+
+            var parts = new string[stack.Count];
+            for (var i = 0; i < stack.Count; i++)
+            {
+                var description = stack[i]?.Description ?? "(null)";
+                parts[i] = i == stack.Count - 1 ? description + " <- " + topMarker : description;
+            }
+
+            return string.Join(" | ", parts);
         }
     }
 }
