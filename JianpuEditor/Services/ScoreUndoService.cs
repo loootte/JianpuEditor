@@ -12,6 +12,7 @@ namespace JianpuEditor.Services
         public const int MaxDepth = 50;
 
         private readonly List<JianpuScore> _snapshots = new List<JianpuScore>();
+        private readonly List<JianpuScore> _redoSnapshots = new List<JianpuScore>();
         private bool _isRestoring;
 
         public ScoreUndoService(IAppMessenger messenger)
@@ -31,6 +32,11 @@ namespace JianpuEditor.Services
             get { return _snapshots.Count > 0 && !_isRestoring; }
         }
 
+        public bool CanRedo
+        {
+            get { return _redoSnapshots.Count > 0 && !_isRestoring; }
+        }
+
         public bool IsRestoring
         {
             get { return _isRestoring; }
@@ -43,12 +49,8 @@ namespace JianpuEditor.Services
                 return;
             }
 
-            _snapshots.Add(ScoreCloneService.Clone(score));
-            if (_snapshots.Count > MaxDepth)
-            {
-                _snapshots.RemoveAt(0);
-            }
-
+            _redoSnapshots.Clear();
+            PushUndo(ScoreCloneService.Clone(score));
             OnStackChanged();
         }
 
@@ -65,26 +67,40 @@ namespace JianpuEditor.Services
 
         public JianpuScore PopSnapshot()
         {
-            if (_snapshots.Count == 0)
+            return PopStack(_snapshots);
+        }
+
+        public JianpuScore PopSnapshotForUndo(JianpuScore currentScore)
+        {
+            if (_isRestoring || currentScore == null || _snapshots.Count == 0)
             {
                 return null;
             }
 
-            var index = _snapshots.Count - 1;
-            var snapshot = _snapshots[index];
-            _snapshots.RemoveAt(index);
-            OnStackChanged();
-            return snapshot;
+            PushRedo(ScoreCloneService.Clone(currentScore));
+            return PopStack(_snapshots);
+        }
+
+        public JianpuScore PopSnapshotForRedo(JianpuScore currentScore)
+        {
+            if (_isRestoring || currentScore == null || _redoSnapshots.Count == 0)
+            {
+                return null;
+            }
+
+            PushUndo(ScoreCloneService.Clone(currentScore));
+            return PopStack(_redoSnapshots);
         }
 
         public void Clear()
         {
-            if (_snapshots.Count == 0)
+            if (_snapshots.Count == 0 && _redoSnapshots.Count == 0)
             {
                 return;
             }
 
             _snapshots.Clear();
+            _redoSnapshots.Clear();
             OnStackChanged();
         }
 
@@ -97,6 +113,38 @@ namespace JianpuEditor.Services
         {
             _isRestoring = false;
             OnStackChanged();
+        }
+
+        private void PushUndo(JianpuScore snapshot)
+        {
+            _snapshots.Add(snapshot);
+            if (_snapshots.Count > MaxDepth)
+            {
+                _snapshots.RemoveAt(0);
+            }
+        }
+
+        private void PushRedo(JianpuScore snapshot)
+        {
+            _redoSnapshots.Add(snapshot);
+            if (_redoSnapshots.Count > MaxDepth)
+            {
+                _redoSnapshots.RemoveAt(0);
+            }
+        }
+
+        private JianpuScore PopStack(List<JianpuScore> stack)
+        {
+            if (stack.Count == 0)
+            {
+                return null;
+            }
+
+            var index = stack.Count - 1;
+            var snapshot = stack[index];
+            stack.RemoveAt(index);
+            OnStackChanged();
+            return snapshot;
         }
 
         private void OnScoreLoaded(ScoreUndoService recipient, ScoreLoadedMessage message)

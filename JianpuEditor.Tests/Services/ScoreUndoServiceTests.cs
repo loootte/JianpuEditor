@@ -11,7 +11,7 @@ namespace JianpuEditor.Tests.Services
         [Fact]
         public void RecordSnapshot_AllowsUndo()
         {
-            var messenger = new AppMessenger(new CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger());
+            var messenger = CreateMessenger();
             var undo = new ScoreUndoService(messenger);
             var score = new JianpuScore { Title = "A" };
 
@@ -27,7 +27,7 @@ namespace JianpuEditor.Tests.Services
         [Fact]
         public void DiscardLastSnapshot_RemovesUnusedSnapshot()
         {
-            var messenger = new AppMessenger(new CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger());
+            var messenger = CreateMessenger();
             var undo = new ScoreUndoService(messenger);
             var score = new JianpuScore();
 
@@ -38,21 +38,23 @@ namespace JianpuEditor.Tests.Services
         }
 
         [Fact]
-        public void ScoreLoadedMessage_ClearsStack()
+        public void ScoreLoadedMessage_ClearsHistory()
         {
-            var messenger = new AppMessenger(new CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger());
+            var messenger = CreateMessenger();
             var undo = new ScoreUndoService(messenger);
             undo.RecordSnapshot(new JianpuScore());
+            undo.PopSnapshotForUndo(new JianpuScore { Title = "After" });
 
             messenger.Send(new ScoreLoadedMessage(new JianpuScore(), null));
 
             Assert.False(undo.CanUndo);
+            Assert.False(undo.CanRedo);
         }
 
         [Fact]
         public void RecordSnapshot_DoesNotPushWhileRestoring()
         {
-            var messenger = new AppMessenger(new CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger());
+            var messenger = CreateMessenger();
             var undo = new ScoreUndoService(messenger);
             undo.RecordSnapshot(new JianpuScore { Title = "A" });
             undo.EnterRestore();
@@ -61,6 +63,55 @@ namespace JianpuEditor.Tests.Services
 
             Assert.True(undo.CanUndo);
             Assert.Equal("A", undo.PopSnapshot().Title);
+        }
+
+        [Fact]
+        public void PopSnapshotForUndo_EnablesRedoWithPriorState()
+        {
+            var messenger = CreateMessenger();
+            var undo = new ScoreUndoService(messenger);
+            undo.RecordSnapshot(new JianpuScore { Title = "Before" });
+            var current = new JianpuScore { Title = "After" };
+
+            var restored = undo.PopSnapshotForUndo(current);
+
+            Assert.Equal("Before", restored.Title);
+            Assert.False(undo.CanUndo);
+            Assert.True(undo.CanRedo);
+
+            var redone = undo.PopSnapshotForRedo(new JianpuScore { Title = "Before" });
+            Assert.Equal("After", redone.Title);
+            Assert.True(undo.CanUndo);
+            Assert.False(undo.CanRedo);
+        }
+
+        [Fact]
+        public void RecordSnapshot_ClearsRedoStack()
+        {
+            var messenger = CreateMessenger();
+            var undo = new ScoreUndoService(messenger);
+            undo.RecordSnapshot(new JianpuScore { Title = "A" });
+            undo.PopSnapshotForUndo(new JianpuScore { Title = "B" });
+            Assert.True(undo.CanRedo);
+
+            undo.RecordSnapshot(new JianpuScore { Title = "C" });
+
+            Assert.False(undo.CanRedo);
+        }
+
+        [Fact]
+        public void PopSnapshotForUndo_ReturnsNullWhenUndoStackEmpty()
+        {
+            var messenger = CreateMessenger();
+            var undo = new ScoreUndoService(messenger);
+
+            Assert.Null(undo.PopSnapshotForUndo(new JianpuScore()));
+            Assert.False(undo.CanRedo);
+        }
+
+        private static AppMessenger CreateMessenger()
+        {
+            return new AppMessenger(new CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger());
         }
     }
 }
