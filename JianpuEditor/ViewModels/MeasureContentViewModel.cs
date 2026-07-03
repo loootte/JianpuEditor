@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JianpuEditor.Core.Abstractions;
@@ -90,6 +91,59 @@ namespace JianpuEditor.ViewModels
         {
             LoadFromMeasure(measureIndex);
             return ScoreEditResult.WithMessage("已更新小节文字");
+        }
+
+        public IReadOnlyList<string> GetLyricTextsForRange(int fromIndex, int toIndex)
+        {
+            _document.EnsureMeasures();
+            return BulkLyricEditService.GetLyricLines(_document.Score, fromIndex, toIndex);
+        }
+
+        public ScoreEditResult ApplyBulkLyrics(
+            int fromIndex,
+            int toIndex,
+            IReadOnlyList<string> lyricLines,
+            bool realign)
+        {
+            _document.EnsureMeasures();
+            IReadOnlyList<IEditCommand> commands;
+            try
+            {
+                commands = BulkLyricEditService.BuildCommands(
+                    _document.Score,
+                    _messenger,
+                    fromIndex,
+                    toIndex,
+                    lyricLines,
+                    realign);
+            }
+            catch (ArgumentException ex)
+            {
+                _messenger.Send(new StatusChangedMessage(ex.Message));
+                return ScoreEditResult.Unchanged;
+            }
+
+            if (commands.Count == 0)
+            {
+                return ScoreEditResult.Unchanged;
+            }
+
+            if (commands.Count == 1)
+            {
+                _history.Execute(commands[0]);
+            }
+            else
+            {
+                _history.Execute(new CompositeEditCommand("批量编辑歌词", commands));
+            }
+
+            LoadFromMeasure(Math.Max(0, _navigation.CurrentMeasureIndex));
+            return new ScoreEditResult
+            {
+                Changed = true,
+                Message = "已批量更新歌词",
+                RequiresScoreRefresh = true
+            };
         }
 
         public ScoreEditResult AlignLyricsToNotes()
