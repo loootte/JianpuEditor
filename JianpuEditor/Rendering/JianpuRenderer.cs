@@ -1229,6 +1229,8 @@ namespace JianpuEditor.Rendering
 
                 DrawNote(
                     g,
+                    measure,
+                    i,
                     measure.MelodyNotes[i],
                     noteX,
                     layout.BlockTop,
@@ -1266,10 +1268,30 @@ namespace JianpuEditor.Rendering
             foreach (var group in grouped)
             {
                 GetNoteDrawBounds(layout, group.Key, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
+                var noteOrnaments = NoteTopAnnotationPlanner.GetOrnamentsForNote(measure, group.Key);
+                NoteTopAnnotationLayout topLayout = null;
+                if (_activeLayoutOptions != null && _activeLayoutOptions.CompactAccidentalGlyphs)
+                {
+                    topLayout = NoteTopAnnotationPlanner.Plan(
+                        measure.MelodyNotes[group.Key],
+                        noteX,
+                        Math.Min(NoteCellWidth, noteWidth),
+                        noteOrnaments,
+                        true);
+                }
+
                 var stackIndex = 0;
                 foreach (var ornament in group)
                 {
-                    DrawOrnamentGlyph(g, ornament, noteX, noteWidth, layout.BlockTop, stackIndex, group.Count());
+                    DrawOrnamentGlyph(
+                        g,
+                        ornament,
+                        noteX,
+                        noteWidth,
+                        layout.BlockTop,
+                        stackIndex,
+                        group.Count(),
+                        topLayout);
                     stackIndex++;
                 }
             }
@@ -1282,7 +1304,8 @@ namespace JianpuEditor.Rendering
             int noteWidth,
             int rowTop,
             int stackIndex,
-            int stackCount)
+            int stackCount,
+            NoteTopAnnotationLayout topLayout = null)
         {
             var glyph = OrnamentService.GetPlaceholderGlyph(ornament.Type);
             if (string.IsNullOrEmpty(glyph))
@@ -1292,10 +1315,22 @@ namespace JianpuEditor.Rendering
 
             var font = UsesLatinOrnamentFont(ornament.Type) ? _ornamentLatinFont : _ornamentFont;
             var size = g.MeasureString(glyph, font);
-            var anchorX = GetOrnamentAnchorX(ornament.Type, noteX, noteWidth);
+            var headWidth = Math.Min(NoteCellWidth, noteWidth);
+            float anchorX;
+            float drawY;
+            if (topLayout != null)
+            {
+                anchorX = topLayout.GetOrnamentAnchorX(ornament.Type, noteX, headWidth);
+                drawY = rowTop + topLayout.GetOrnamentY(ornament.Type);
+            }
+            else
+            {
+                anchorX = GetOrnamentAnchorX(ornament.Type, noteX, noteWidth);
+                drawY = rowTop + GetOrnamentTopOffset(ornament.Type);
+            }
+
             var totalWidth = stackCount * size.Width + Math.Max(0, stackCount - 1) * 2f;
             var drawX = anchorX - totalWidth / 2f + stackIndex * (size.Width + 2f);
-            var drawY = rowTop + GetOrnamentTopOffset(ornament.Type);
             using (var ink = CreateInkBrush())
             {
                 g.DrawString(glyph, font, ink, drawX, drawY);
@@ -1837,18 +1872,26 @@ namespace JianpuEditor.Rendering
 
         private const float CompactAccidentalFontSize = 10f;
 
-        private bool ShouldUseCompactAccidentalGlyphs(JianpuNote note)
-        {
-            return _activeLayoutOptions != null
-                && _activeLayoutOptions.CompactAccidentalGlyphs
-                && note != null
-                && note.Type == NoteType.Note
-                && note.Accidental != AccidentalKind.None;
-        }
-
-        private void DrawNote(Graphics g, JianpuNote note, int x, int y, int noteWidth, bool isSelected)
+        private void DrawNote(
+            Graphics g,
+            JianpuMeasure measure,
+            int noteIndex,
+            JianpuNote note,
+            int x,
+            int y,
+            int noteWidth,
+            bool isSelected)
         {
             var headWidth = Math.Min(NoteCellWidth, noteWidth);
+            var useTopLayout = _activeLayoutOptions != null && _activeLayoutOptions.CompactAccidentalGlyphs;
+            NoteTopAnnotationLayout topLayout = null;
+            if (useTopLayout && note != null && note.Type == NoteType.Note)
+            {
+                var ornaments = measure == null
+                    ? new List<JianpuOrnament>()
+                    : NoteTopAnnotationPlanner.GetOrnamentsForNote(measure, noteIndex);
+                topLayout = NoteTopAnnotationPlanner.Plan(note, x, headWidth, ornaments, true);
+            }
 
             if (isSelected)
             {
@@ -1871,9 +1914,10 @@ namespace JianpuEditor.Rendering
                 {
                     DrawCenteredNoteText(g, "0", x, y, headWidth, _noteFont, ink);
                 }
-                else if (ShouldUseCompactAccidentalGlyphs(note))
+                else if (topLayout != null)
                 {
-                    DrawCompactAccidentalNote(g, note, x, y, headWidth, ink);
+                    DrawCenteredNoteText(g, JianpuPitchCodec.GetDisplayDegree(note).ToString(), x, y, headWidth, _noteFont, ink);
+                    DrawCompactAccidentalMark(g, note, y, topLayout, ink);
                 }
                 else
                 {
@@ -1887,7 +1931,14 @@ namespace JianpuEditor.Rendering
                         ink);
                 }
 
-                DrawNoteOctaveDots(g, note, x, y, headCenterX, ink);
+                if (topLayout != null)
+                {
+                    DrawNoteOctaveDots(g, note, y, topLayout, ink);
+                }
+                else
+                {
+                    DrawNoteOctaveDots(g, note, x, y, headCenterX, ink);
+                }
                 DrawNoteDottedAndDashes(g, note, x, y, noteWidth, headWidth, headCenterX, ink, inkPen);
             }
         }
@@ -1907,10 +1958,17 @@ namespace JianpuEditor.Rendering
             g.DrawString(text, font, ink, textX, textY);
         }
 
-        private void DrawCompactAccidentalNote(Graphics g, JianpuNote note, int x, int y, int headWidth, Brush ink)
+        private void DrawCompactAccidentalMark(
+            Graphics g,
+            JianpuNote note,
+            int y,
+            NoteTopAnnotationLayout topLayout,
+            Brush ink)
         {
-            var degreeText = JianpuPitchCodec.GetDisplayDegree(note).ToString();
-            DrawCenteredNoteText(g, degreeText, x, y, headWidth, _noteFont, ink);
+            if (topLayout == null || !topLayout.HasAccidental)
+            {
+                return;
+            }
 
             var mark = JianpuPitchCodec.GetAccidentalMark(note);
             if (string.IsNullOrEmpty(mark))
@@ -1920,10 +1978,30 @@ namespace JianpuEditor.Rendering
 
             using (var accidentalFont = new Font("Arial", CompactAccidentalFontSize, FontStyle.Bold))
             {
-                var markSize = g.MeasureString(mark, accidentalFont);
-                var markX = x + headWidth - markSize.Width - 2f;
-                var markY = y + 4f;
-                g.DrawString(mark, accidentalFont, ink, markX, markY);
+                g.DrawString(mark, accidentalFont, ink, topLayout.AccidentalX, y + NoteTopAnnotationLayout.AccidentalY);
+            }
+        }
+
+        private void DrawNoteOctaveDots(Graphics g, JianpuNote note, int y, NoteTopAnnotationLayout topLayout, Brush ink)
+        {
+            if (note.Octave > 0)
+            {
+                for (var i = 0; i < note.Octave; i++)
+                {
+                    g.FillEllipse(
+                        ink,
+                        topLayout.OctaveDotCenterX - 3,
+                        y + NoteTopAnnotationLayout.OctaveDotBaseY + i * 10,
+                        (int)NoteTopAnnotationLayout.OctaveDotDiameter,
+                        (int)NoteTopAnnotationLayout.OctaveDotDiameter);
+                }
+            }
+            else if (note.Octave < 0)
+            {
+                for (var i = 0; i < Math.Abs(note.Octave); i++)
+                {
+                    g.FillEllipse(ink, topLayout.HeadCenterX - 3, y + 52 + i * 10, 6, 6);
+                }
             }
         }
 
