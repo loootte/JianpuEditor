@@ -229,6 +229,44 @@ namespace JianpuEditor.ViewModels
             get { return _document.KeySignature; }
         }
 
+        public IReadOnlyList<HarmonyProgressionSuggestion> GetHarmonyProgressionSuggestions(
+            int fromMeasureIndex,
+            int toMeasureIndex)
+        {
+            _document.EnsureMeasures();
+            if (fromMeasureIndex < 0
+                || toMeasureIndex < fromMeasureIndex
+                || toMeasureIndex >= _document.Score.Measures.Count)
+            {
+                return Array.Empty<HarmonyProgressionSuggestion>();
+            }
+
+            var measures = new List<JianpuMeasure>();
+            for (var i = fromMeasureIndex; i <= toMeasureIndex; i++)
+            {
+                measures.Add(_document.Score.Measures[i]);
+            }
+
+            return _harmonySuggestionService.SuggestForMeasureRange(measures, _document.KeySignature);
+        }
+
+        public ScoreEditResult ApplyHarmonyProgressionSuggestion(HarmonyProgressionSuggestion progression, int firstMeasureIndex)
+        {
+            if (progression?.Steps == null || progression.Steps.Count == 0)
+            {
+                return ScoreEditResult.Unchanged;
+            }
+
+            return EditCommandHelper.Execute(
+                _history,
+                new ScoreSnapshotEditCommand(
+                    _document,
+                    _navigation,
+                    _messenger,
+                    () => ApplyHarmonyProgressionSuggestionCore(progression, firstMeasureIndex),
+                    "应用和弦进行建议"));
+        }
+
         public IReadOnlyList<HarmonySuggestion> GetHarmonySuggestions(int measureIndex, double beatPosition)
         {
             _document.EnsureMeasures();
@@ -289,6 +327,38 @@ namespace JianpuEditor.ViewModels
                     _messenger,
                     () => ApplyHarmonySuggestionCore(measureIndex, beatPosition, chordSymbol.Trim()),
                     "应用和弦建议"));
+        }
+
+        private ScoreEditResult ApplyHarmonyProgressionSuggestionCore(
+            HarmonyProgressionSuggestion progression,
+            int firstMeasureIndex)
+        {
+            var applied = 0;
+            foreach (var step in progression.Steps)
+            {
+                var result = ApplyHarmonySuggestionCore(
+                    firstMeasureIndex + step.MeasureOffset,
+                    step.BeatPosition,
+                    step.ChordSymbol);
+                if (result.Changed)
+                {
+                    applied++;
+                }
+            }
+
+            if (applied == 0)
+            {
+                return ScoreEditResult.Unchanged;
+            }
+
+            return new ScoreEditResult
+            {
+                Changed = true,
+                Message = "已应用和弦进行（" + applied + " 个小节）",
+                SelectMeasureIndex = firstMeasureIndex,
+                SelectChordMeasureIndex = firstMeasureIndex,
+                SelectChordMarkerIndex = 0
+            };
         }
 
         private ScoreEditResult ApplyHarmonySuggestionCore(int measureIndex, double beatPosition, string chordSymbol)

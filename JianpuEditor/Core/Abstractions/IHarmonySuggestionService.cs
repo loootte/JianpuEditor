@@ -9,5 +9,9 @@ namespace JianpuEditor.Core.Abstractions
             JianpuMeasure measure,
             string keySignature,
             double beatPosition);
+
+        IReadOnlyList<HarmonyProgressionSuggestion> SuggestForMeasureRange(
+            IReadOnlyList<JianpuMeasure> measures,
+            string keySignature);
     }
 }

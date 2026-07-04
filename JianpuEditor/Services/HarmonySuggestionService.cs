@@ -76,6 +76,31 @@ namespace JianpuEditor.Services
                 .ToList();
         }
 
+        public static IReadOnlyList<HarmonyProgressionSuggestion> SuggestForMeasureRange(
+            IReadOnlyList<JianpuMeasure> measures,
+            string keySignature)
+        {
+            return HarmonyProgressionService.SuggestForMeasureRange(measures, keySignature);
+        }
+
+        public static int GetRomanRootDegree(string romanNumeral)
+        {
+            return ParseRomanScaleDegree(romanNumeral ?? string.Empty);
+        }
+
+        public static IReadOnlyList<int> GetTriadScaleDegrees(string romanNumeral)
+        {
+            var root = ParseRomanScaleDegree(romanNumeral ?? string.Empty);
+            if (root < 1 || root > 7)
+            {
+                return Array.Empty<int>();
+            }
+
+            var third = ((root + 1) % 7) + 1;
+            var fifth = ((root + 3) % 7) + 1;
+            return new[] { root, third, fifth };
+        }
+
         public static string RomanNumeralToChordSymbol(string romanNumeral, int tonicPitchClass)
         {
             if (string.IsNullOrWhiteSpace(romanNumeral))

@@ -13,5 +13,12 @@ namespace JianpuEditor.Services
         {
             return HarmonySuggestionService.SuggestForMeasure(measure, keySignature, beatPosition);
         }
+
+        public IReadOnlyList<HarmonyProgressionSuggestion> SuggestForMeasureRange(
+            IReadOnlyList<JianpuMeasure> measures,
+            string keySignature)
+        {
+            return HarmonySuggestionService.SuggestForMeasureRange(measures, keySignature);
+        }
     }
 }

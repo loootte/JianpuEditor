@@ -1154,6 +1154,12 @@ namespace JianpuEditor
         private void ShowHarmonySuggestionDialog()
         {
             _viewModel.Document.EnsureMeasures();
+            if (_viewModel.Selection.TryGetContiguousMeasureRange(out var fromIndex, out var toIndex))
+            {
+                ShowHarmonyProgressionSuggestionDialog(fromIndex, toIndex);
+                return;
+            }
+
             var measureIndex = _viewModel.Selection.HasChordSelected
                 ? _viewModel.Selection.ChordMeasureIndex
                 : Math.Max(0, _viewModel.Selection.MeasureIndex);
@@ -1185,6 +1191,32 @@ namespace JianpuEditor
                     measureIndex,
                     beatPosition,
                     dialog.SelectedSuggestion.ChordSymbol));
+            }
+        }
+
+        private void ShowHarmonyProgressionSuggestionDialog(int fromIndex, int toIndex)
+        {
+            var suggestions = _viewModel.ChordEditor.GetHarmonyProgressionSuggestions(fromIndex, toIndex);
+            if (suggestions == null || suggestions.Count == 0)
+            {
+                MessageBox.Show("当前选区无法生成和弦进行建议。", "和弦建议", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var dialog = new Views.HarmonyProgressionSuggestionDialog(
+                fromIndex + 1,
+                toIndex + 1,
+                _viewModel.Document.KeySignature,
+                suggestions))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedSuggestion == null)
+                {
+                    return;
+                }
+
+                ExecuteScoreEdit(() => _viewModel.ChordEditor.ApplyHarmonyProgressionSuggestion(
+                    dialog.SelectedSuggestion,
+                    fromIndex));
             }
         }
 
