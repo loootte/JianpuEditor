@@ -408,6 +408,79 @@ namespace JianpuEditor.Rendering
             return bitmap;
         }
 
+        public int GetStaffLineCount(JianpuScore score, int width, ScoreLayoutOptions options = null)
+        {
+            options = options ?? ScoreLayoutOptions.Default;
+            return BuildLayout(score, width, options).Lines.Count;
+        }
+
+        public Bitmap RenderPdfPageToBitmap(
+            JianpuScore score,
+            int width,
+            ScoreLayoutOptions options,
+            PdfPageSlice slice)
+        {
+            options = options ?? ScoreLayoutOptions.PdfExport;
+            slice = slice ?? new PdfPageSlice { PageNumber = 1, TotalPages = 1 };
+            var layout = BuildLayout(score, width, options);
+            if (layout.Lines.Count == 0 || slice.LineCount <= 0)
+            {
+                var emptyHeight = slice.PageNumber == 1
+                    ? GetMarginTop(options)
+                    : PdfPagePlanner.CompactHeaderHeight;
+                emptyHeight += PdfPagePlanner.BottomMargin;
+                var emptyBitmap = new Bitmap(Math.Max(1, width), Math.Max(1, emptyHeight));
+                using (var g = Graphics.FromImage(emptyBitmap))
+                {
+                    g.Clear(AppTheme.GetScoreBackground(false));
+                    if (slice.PageNumber == 1)
+                    {
+                        DrawHeader(g, score, width, options);
+                    }
+                    else
+                    {
+                        DrawPdfContinuationHeader(g, score, width, slice);
+                    }
+                }
+
+                return emptyBitmap;
+            }
+
+            var start = Math.Max(0, slice.FirstLineIndex);
+            var count = Math.Min(slice.LineCount, layout.Lines.Count - start);
+            var firstLine = layout.Lines[start];
+            var lastLine = layout.Lines[start + count - 1];
+            var contentHeight = lastLine.BlockTop + StaffBlockHeight - firstLine.BlockTop;
+            var headerHeight = slice.PageNumber == 1
+                ? GetMarginTop(options)
+                : PdfPagePlanner.CompactHeaderHeight;
+            var bitmapHeight = headerHeight + contentHeight + PdfPagePlanner.BottomMargin;
+            var bitmap = new Bitmap(width, Math.Max(1, bitmapHeight));
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                _activeLayoutOptions = options;
+                g.Clear(AppTheme.GetScoreBackground(false));
+                if (slice.PageNumber == 1)
+                {
+                    DrawHeader(g, score, width, options);
+                }
+                else
+                {
+                    DrawPdfContinuationHeader(g, score, width, slice);
+                }
+
+                g.TranslateTransform(0, headerHeight - firstLine.BlockTop);
+                DrawRowLabelsForBlock(g, firstLine.BlockTop);
+                DrawStaffLineRange(g, score, layout, start, count, options);
+                DrawTiesForLineRange(g, score, layout, start, count, -1);
+                _activeLayoutOptions = null;
+            }
+
+            return bitmap;
+        }
+
         public static Rectangle GetNoteBounds(MeasureLayout measure, int noteIndex)
         {
             return new Rectangle(
@@ -486,6 +559,24 @@ namespace JianpuEditor.Rendering
         public static int GetLyricRowTop(MeasureLayout measure)
         {
             return GetSecondaryRowTop(measure) + SecondaryRowHeight + RowGap;
+        }
+
+        private void DrawPdfContinuationHeader(Graphics g, JianpuScore score, int width, PdfPageSlice slice)
+        {
+            var title = string.IsNullOrWhiteSpace(score.Title) ? "未命名乐曲" : score.Title.Trim();
+            var pageText = title + "    第 " + slice.PageNumber + " / " + slice.TotalPages + " 页";
+            using (var font = new Font("Microsoft YaHei", 14f, FontStyle.Regular))
+            using (var ink = CreateInkBrush())
+            {
+                g.DrawString(pageText, font, ink, MarginLeft, 12f);
+            }
+        }
+
+        private void DrawRowLabelsForBlock(Graphics g, int blockTop)
+        {
+            DrawRowLabel(g, "主旋律", blockTop + 28);
+            DrawRowLabel(g, "副旋律", blockTop + MelodyRowHeight + RowGap + 10);
+            DrawRowLabel(g, "歌词", blockTop + MelodyRowHeight + RowGap + SecondaryRowHeight + RowGap + 8);
         }
 
         private void DrawHeader(Graphics g, JianpuScore score, int width, ScoreLayoutOptions options)
@@ -696,9 +787,71 @@ namespace JianpuEditor.Rendering
             IReadOnlyList<ScoreNoteRef> selectedNotes,
             ScoreLayoutOptions layoutOptions)
         {
+            DrawStaffLineRange(
+                g,
+                score,
+                layout,
+                0,
+                layout.Lines.Count,
+                selectedMeasureIndex,
+                selectedNoteIndex,
+                selectedInsertIndex,
+                selectedMeasureIndices,
+                selectedChordMeasureIndex,
+                selectedChordMarkerIndex,
+                selectedNotes,
+                layoutOptions);
+            DrawTiesForLineRange(g, score, layout, 0, layout.Lines.Count, selectedTieIndex);
+        }
+
+        private void DrawStaffLineRange(
+            Graphics g,
+            JianpuScore score,
+            ScoreLayout layout,
+            int firstLineIndex,
+            int lineCount,
+            ScoreLayoutOptions layoutOptions)
+        {
+            DrawStaffLineRange(
+                g,
+                score,
+                layout,
+                firstLineIndex,
+                lineCount,
+                -1,
+                -1,
+                -1,
+                null,
+                -1,
+                -1,
+                null,
+                layoutOptions);
+        }
+
+        private void DrawStaffLineRange(
+            Graphics g,
+            JianpuScore score,
+            ScoreLayout layout,
+            int firstLineIndex,
+            int lineCount,
+            int selectedMeasureIndex,
+            int selectedNoteIndex,
+            int selectedInsertIndex,
+            IReadOnlyList<int> selectedMeasureIndices,
+            int selectedChordMeasureIndex,
+            int selectedChordMarkerIndex,
+            IReadOnlyList<ScoreNoteRef> selectedNotes,
+            ScoreLayoutOptions layoutOptions)
+        {
             layoutOptions = layoutOptions ?? ScoreLayoutOptions.Default;
+            var visibleMeasures = BuildVisibleMeasures(layout, firstLineIndex, lineCount);
             foreach (var measure in layout.Measures)
             {
+                if (!visibleMeasures.Contains(measure))
+                {
+                    continue;
+                }
+
                 var measureData = score.Measures[measure.MeasureIndex];
                 var isInSelection = IsMeasureSelected(measure.MeasureIndex, selectedMeasureIndices, selectedMeasureIndex);
                 var hasSelectedNotes = selectedNotes != null && selectedNotes.Count > 0;
@@ -741,8 +894,107 @@ namespace JianpuEditor.Rendering
                 DrawBarLine(g, measure.X, measure.BlockTop, StaffBlockHeight);
                 DrawBarLine(g, measure.BarLineX, measure.BlockTop, StaffBlockHeight);
             }
+        }
 
-            DrawTies(g, score, layout, selectedTieIndex);
+        private static HashSet<MeasureLayout> BuildVisibleMeasures(ScoreLayout layout, int firstLineIndex, int lineCount)
+        {
+            var visibleMeasures = new HashSet<MeasureLayout>();
+            if (layout?.Lines == null || lineCount <= 0)
+            {
+                return visibleMeasures;
+            }
+
+            var endLine = Math.Min(layout.Lines.Count, firstLineIndex + lineCount);
+            for (var lineIndex = Math.Max(0, firstLineIndex); lineIndex < endLine; lineIndex++)
+            {
+                var line = layout.Lines[lineIndex];
+                if (line.Measures == null)
+                {
+                    continue;
+                }
+
+                foreach (var measure in line.Measures)
+                {
+                    visibleMeasures.Add(measure);
+                }
+            }
+
+            return visibleMeasures;
+        }
+
+        private void DrawTiesForLineRange(
+            Graphics g,
+            JianpuScore score,
+            ScoreLayout layout,
+            int firstLineIndex,
+            int lineCount,
+            int selectedTieIndex)
+        {
+            if (score.Ties == null || score.Ties.Count == 0)
+            {
+                return;
+            }
+
+            var visibleMeasures = BuildVisibleMeasures(layout, firstLineIndex, lineCount);
+            for (var i = 0; i < score.Ties.Count; i++)
+            {
+                var tie = score.Ties[i];
+                var startLayout = FindMeasureLayout(layout, tie.StartMeasureIndex);
+                var endLayout = FindMeasureLayout(layout, tie.EndMeasureIndex);
+                if (startLayout == null
+                    || endLayout == null
+                    || !visibleMeasures.Contains(startLayout)
+                    || !visibleMeasures.Contains(endLayout))
+                {
+                    continue;
+                }
+
+                if (!TryGetTieGeometry(score, layout, tie, out var geometry))
+                {
+                    continue;
+                }
+
+                var isSelected = i == selectedTieIndex;
+                if (isSelected)
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(48, 66, 133, 244)))
+                    using (var path = new GraphicsPath())
+                    {
+                        path.AddBezier(
+                            geometry.X1,
+                            geometry.BaseY,
+                            geometry.X1,
+                            geometry.ArchTop,
+                            geometry.X2,
+                            geometry.ArchTop,
+                            geometry.X2,
+                            geometry.BaseY);
+                        g.FillPath(brush, path);
+                    }
+                }
+
+                var color = isSelected ? AppTheme.TieActive : AppTheme.TieInactive;
+                var width = isSelected ? 3f : 2f;
+                using (var pen = new Pen(color, width))
+                {
+                    if (isSelected)
+                    {
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+                    }
+
+                    g.DrawBezier(
+                        pen,
+                        geometry.X1,
+                        geometry.BaseY,
+                        geometry.X1,
+                        geometry.ArchTop,
+                        geometry.X2,
+                        geometry.ArchTop,
+                        geometry.X2,
+                        geometry.BaseY);
+                }
+            }
         }
 
         private ScoreHitResult HitTestTies(JianpuScore score, ScoreLayout layout, Point point)
