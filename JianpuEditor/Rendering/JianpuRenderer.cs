@@ -28,6 +28,8 @@ namespace JianpuEditor.Rendering
         public const float LyricBaseFontSize = 20f;
 
         private readonly Font _rowLabelFont = new Font("Microsoft YaHei", 9f, FontStyle.Regular);
+        private readonly Font _ornamentFont = new Font("Microsoft YaHei", 10f, FontStyle.Regular);
+        private readonly Font _ornamentLatinFont = new Font("Arial", 10f, FontStyle.Italic);
         private readonly Font _noteFont = new Font("Arial", 26f, FontStyle.Bold);
         private readonly Font _secondaryFont = new Font("Arial", 20f, FontStyle.Bold);
         private bool _disposed;
@@ -63,6 +65,8 @@ namespace JianpuEditor.Rendering
             }
 
             _rowLabelFont.Dispose();
+            _ornamentFont.Dispose();
+            _ornamentLatinFont.Dispose();
             _noteFont.Dispose();
             _secondaryFont.Dispose();
             _disposed = true;
@@ -438,6 +442,34 @@ namespace JianpuEditor.Rendering
                 : MinNoteWidth;
             GetNoteDrawBounds(layout, noteIndex, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
             centerX = GetNoteHeadCenterX(noteX, noteWidth);
+            return true;
+        }
+
+        public static bool TryGetOrnamentAnchorX(
+            MeasureLayout layout,
+            JianpuMeasure measure,
+            JianpuOrnament ornament,
+            out float anchorX)
+        {
+            anchorX = 0;
+            if (layout == null || measure == null || ornament == null || ornament.Type == OrnamentType.Unknown)
+            {
+                return false;
+            }
+
+            var noteIndex = OrnamentService.ResolveNoteIndex(measure, ornament);
+            var noteCount = measure.MelodyNotes?.Count ?? 0;
+            if (noteIndex < 0 || noteIndex >= noteCount)
+            {
+                return false;
+            }
+
+            var melodyScale = layout.MelodyScale;
+            var minDrawWidth = melodyScale < 0.999
+                ? Math.Max(6, (int)Math.Round(MinNoteWidth * melodyScale))
+                : MinNoteWidth;
+            GetNoteDrawBounds(layout, noteIndex, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
+            anchorX = GetOrnamentAnchorX(ornament.Type, noteX, noteWidth);
             return true;
         }
 
@@ -953,6 +985,90 @@ namespace JianpuEditor.Rendering
             }
 
             DrawBeatGroupUnderlines(g, measure, layout, melodyScale, minDrawWidth);
+            DrawOrnaments(g, measure, layout, melodyScale, minDrawWidth);
+        }
+
+        private void DrawOrnaments(
+            Graphics g,
+            JianpuMeasure measure,
+            MeasureLayout layout,
+            double melodyScale,
+            int minDrawWidth)
+        {
+            OrnamentService.NormalizeMeasure(measure);
+            if (measure.Ornaments == null || measure.Ornaments.Count == 0)
+            {
+                return;
+            }
+
+            var noteCount = measure.MelodyNotes?.Count ?? 0;
+            if (noteCount == 0)
+            {
+                return;
+            }
+
+            var grouped = measure.Ornaments
+                .GroupBy(item => OrnamentService.ResolveNoteIndex(measure, item))
+                .Where(group => group.Key >= 0 && group.Key < noteCount)
+                .OrderBy(group => group.Key);
+            foreach (var group in grouped)
+            {
+                GetNoteDrawBounds(layout, group.Key, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
+                var stackIndex = 0;
+                foreach (var ornament in group)
+                {
+                    DrawOrnamentGlyph(g, ornament, noteX, noteWidth, layout.BlockTop, stackIndex, group.Count());
+                    stackIndex++;
+                }
+            }
+        }
+
+        private void DrawOrnamentGlyph(
+            Graphics g,
+            JianpuOrnament ornament,
+            int noteX,
+            int noteWidth,
+            int rowTop,
+            int stackIndex,
+            int stackCount)
+        {
+            var glyph = OrnamentService.GetPlaceholderGlyph(ornament.Type);
+            if (string.IsNullOrEmpty(glyph))
+            {
+                return;
+            }
+
+            var font = UsesLatinOrnamentFont(ornament.Type) ? _ornamentLatinFont : _ornamentFont;
+            var size = g.MeasureString(glyph, font);
+            var anchorX = GetOrnamentAnchorX(ornament.Type, noteX, noteWidth);
+            var totalWidth = stackCount * size.Width + Math.Max(0, stackCount - 1) * 2f;
+            var drawX = anchorX - totalWidth / 2f + stackIndex * (size.Width + 2f);
+            var drawY = rowTop + GetOrnamentTopOffset(ornament.Type);
+            using (var ink = CreateInkBrush())
+            {
+                g.DrawString(glyph, font, ink, drawX, drawY);
+            }
+        }
+
+        private static bool UsesLatinOrnamentFont(OrnamentType type)
+        {
+            return type == OrnamentType.Trill || type == OrnamentType.Mordent;
+        }
+
+        private static float GetOrnamentAnchorX(OrnamentType type, int noteX, int noteWidth)
+        {
+            var headWidth = Math.Min(NoteCellWidth, noteWidth);
+            if (type == OrnamentType.GraceNote)
+            {
+                return noteX + Math.Min(14f, headWidth * 0.25f);
+            }
+
+            return GetNoteHeadCenterX(noteX, noteWidth);
+        }
+
+        private static float GetOrnamentTopOffset(OrnamentType type)
+        {
+            return type == OrnamentType.Fermata ? 0f : 2f;
         }
 
         private static float GetNoteHeadCenterX(int noteX, int noteWidth)
