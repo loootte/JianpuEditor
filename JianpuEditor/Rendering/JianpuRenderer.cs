@@ -30,6 +30,8 @@ namespace JianpuEditor.Rendering
         private readonly Font _rowLabelFont = new Font("Microsoft YaHei", 9f, FontStyle.Regular);
         private readonly Font _ornamentFont = new Font("Microsoft YaHei", 10f, FontStyle.Regular);
         private readonly Font _ornamentLatinFont = new Font("Arial", 10f, FontStyle.Italic);
+        private readonly Font _ornamentStackedFont = new Font("Microsoft YaHei", 11f, FontStyle.Regular);
+        private readonly Font _ornamentLatinStackedFont = new Font("Arial", 11f, FontStyle.Italic);
         private readonly Font _noteFont = new Font("Arial", 26f, FontStyle.Bold);
         private readonly Font _secondaryFont = new Font("Arial", 20f, FontStyle.Bold);
         private bool _disposed;
@@ -67,6 +69,8 @@ namespace JianpuEditor.Rendering
             _rowLabelFont.Dispose();
             _ornamentFont.Dispose();
             _ornamentLatinFont.Dispose();
+            _ornamentStackedFont.Dispose();
+            _ornamentLatinStackedFont.Dispose();
             _noteFont.Dispose();
             _secondaryFont.Dispose();
             _disposed = true;
@@ -1314,17 +1318,10 @@ namespace JianpuEditor.Rendering
             }
 
             var headWidth = Math.Min(NoteCellWidth, noteWidth);
-            Font font;
-            if (topLayout != null && ornament.Type != OrnamentType.Fermata)
-            {
-                font = UsesLatinOrnamentFont(ornament.Type)
-                    ? new Font("Arial", 11f, FontStyle.Italic)
-                    : new Font("Microsoft YaHei", 11f, FontStyle.Regular);
-            }
-            else
-            {
-                font = UsesLatinOrnamentFont(ornament.Type) ? _ornamentLatinFont : _ornamentFont;
-            }
+            var useStackedOrnamentFont = topLayout != null && ornament.Type != OrnamentType.Fermata;
+            var font = UsesLatinOrnamentFont(ornament.Type)
+                ? useStackedOrnamentFont ? _ornamentLatinStackedFont : _ornamentLatinFont
+                : useStackedOrnamentFont ? _ornamentStackedFont : _ornamentFont;
 
             var size = g.MeasureString(glyph, font);
             float anchorX;
@@ -1345,11 +1342,6 @@ namespace JianpuEditor.Rendering
             using (var ink = CreateInkBrush())
             {
                 g.DrawString(glyph, font, ink, drawX, drawY);
-            }
-
-            if (!ReferenceEquals(font, _ornamentFont) && !ReferenceEquals(font, _ornamentLatinFont))
-            {
-                font.Dispose();
             }
         }
 
