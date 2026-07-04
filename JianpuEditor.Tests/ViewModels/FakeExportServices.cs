@@ -33,6 +33,17 @@ namespace JianpuEditor.Tests.ViewModels
         }
     }
 
+    internal sealed class FakeMidiImportService : IMidiImportService
+    {
+        public string LastPath { get; private set; }
+
+        public JianpuScore Import(string path)
+        {
+            LastPath = path;
+            return new JianpuScore { Title = System.IO.Path.GetFileNameWithoutExtension(path) };
+        }
+    }
+
     internal sealed class FakeSampleLibraryService : ISampleLibraryService
     {
         public IReadOnlyList<string> Samples { get; set; } = new[] { @"C:\sample\demo.jianpu" };

@@ -106,6 +106,7 @@ namespace JianpuEditor
             mainViewModel.RequestSaveAsScore += (s, e) => OnSaveScoreAs(s, e);
             mainViewModel.RequestExportPdf += (s, e) => OnExportPdf(s, e);
             mainViewModel.RequestExportMidi += (s, e) => OnExportMidi(s, e);
+            mainViewModel.RequestImportMidi += (s, e) => OnImportMidi(s, e);
             mainViewModel.RequestTransposeDialog += (s, e) => ShowTransposeDialog();
         }
 
@@ -228,6 +229,7 @@ namespace JianpuEditor
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add(CreateMenuItem("导出 PDF...", Keys.Control | Keys.P, OnExportPdf));
             fileMenu.DropDownItems.Add(CreateMenuItem("导出 MIDI...", Keys.None, OnExportMidi));
+            fileMenu.DropDownItems.Add(CreateMenuItem("导入 MIDI... (Spike)", Keys.None, OnImportMidi));
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             var sampleMenu = new ToolStripMenuItem("示例曲库");
             sampleMenu.DropDownOpening += (s, e) => PopulateSampleLibraryMenu(sampleMenu.DropDownItems);
@@ -897,6 +899,38 @@ namespace JianpuEditor
             _glue.ResetPlaybackHead();
             _binder.SyncHeaderFromDocument();
             _binder.SyncFromViewModels();
+        }
+
+        private void OnImportMidi(object sender, EventArgs e)
+        {
+            _viewModel.Playback.Stop();
+            _viewModel.TieEditor.CancelTieMode();
+            using (var dialog = new OpenFileDialog
+            {
+                Filter = "MIDI 文件 (*.mid)|*.mid|所有文件 (*.*)|*.*"
+            })
+            {
+                if (dialog.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                try
+                {
+                    var result = _viewModel.ImportMidi(dialog.FileName);
+                    Text = _viewModel.Document.WindowTitle;
+                    _glue.ApplyEditResult(new ScoreEditResult { Changed = true, SelectMeasureIndex = 0 });
+                    _glue.ResetPlaybackHead();
+                    _binder.SyncHeaderFromDocument();
+                    _binder.SyncFromViewModels();
+                    _viewModel.SetStatus(result.Message);
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Exception("导入 MIDI 失败: " + dialog.FileName, ex);
+                    MessageBox.Show("导入 MIDI 失败: " + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
 
         private void OnOpenScore(object sender, EventArgs e)

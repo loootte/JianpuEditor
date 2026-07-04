@@ -235,6 +235,26 @@ namespace JianpuEditor.ViewModels
             OnPropertyChanged(nameof(WindowTitle));
         }
 
+        public void LoadFromMidi(JianpuScore score)
+        {
+            _score = score ?? new JianpuScore();
+            EnsureMeasures();
+            ChordMarkerService.NormalizeScore(_score);
+            LyricSyllableService.NormalizeScore(_score);
+            OrnamentService.NormalizeScore(_score);
+            CurrentFilePath = null;
+            IsDirty = true;
+            _history.Clear();
+            OnPropertyChanged(nameof(Score));
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(KeySignature));
+            OnPropertyChanged(nameof(Tempo));
+            OnPropertyChanged(nameof(Bpm));
+            OnPropertyChanged(nameof(Composer));
+            OnPropertyChanged(nameof(WindowTitle));
+            _messenger?.Send(new ScoreLoadedMessage(_score, null));
+        }
+
         public void ClearMeasures()
         {
             EnsureMeasures();
