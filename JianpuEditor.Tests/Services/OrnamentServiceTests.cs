@@ -1,0 +1,73 @@
+using JianpuEditor.Models;
+using JianpuEditor.Services;
+using JianpuEditor.Tests.Helpers;
+using Xunit;
+
+namespace JianpuEditor.Tests.Services
+{
+    public sealed class OrnamentServiceTests
+    {
+        [Fact]
+        public void NormalizeMeasure_SyncsBeatPositionFromNoteIndex()
+        {
+            var measure = ScoreTestHelper.Measure(
+                ScoreTestHelper.Note(1),
+                ScoreTestHelper.Note(2, dashes: 1),
+                ScoreTestHelper.Note(3));
+            measure.Ornaments.Add(new JianpuOrnament
+            {
+                Type = OrnamentType.Trill,
+                NoteIndex = 2
+            });
+
+            OrnamentService.NormalizeMeasure(measure);
+
+            Assert.Single(measure.Ornaments);
+            Assert.Equal(3, measure.Ornaments[0].BeatPosition);
+            Assert.Equal(OrnamentType.Trill, measure.Ornaments[0].Type);
+        }
+
+        [Fact]
+        public void NormalizeMeasure_DropsUnknownOrnaments()
+        {
+            var measure = ScoreTestHelper.Measure(ScoreTestHelper.Note(1));
+            measure.Ornaments.Add(new JianpuOrnament { Type = OrnamentType.Unknown });
+            measure.Ornaments.Add(new JianpuOrnament { Type = OrnamentType.Staccato, NoteIndex = 0 });
+
+            OrnamentService.NormalizeMeasure(measure);
+
+            Assert.Single(measure.Ornaments);
+            Assert.Equal(OrnamentType.Staccato, measure.Ornaments[0].Type);
+        }
+
+        [Fact]
+        public void ResolveNoteIndex_FindsNoteFromBeatPosition()
+        {
+            var measure = ScoreTestHelper.Measure(
+                ScoreTestHelper.Note(1),
+                ScoreTestHelper.Note(2, dashes: 1),
+                ScoreTestHelper.Note(3));
+            var ornament = new JianpuOrnament { Type = OrnamentType.Fermata, BeatPosition = 3 };
+
+            Assert.Equal(2, OrnamentService.ResolveNoteIndex(measure, ornament));
+        }
+
+        [Fact]
+        public void GetParameter_ReturnsStoredValue()
+        {
+            var ornament = new JianpuOrnament
+            {
+                Type = OrnamentType.GraceNote,
+                Parameters = new Dictionary<string, string>
+                {
+                    [OrnamentService.ParamPitch] = "3",
+                    [OrnamentService.ParamDirection] = "up"
+                }
+            };
+
+            Assert.Equal("3", OrnamentService.GetParameter(ornament, OrnamentService.ParamPitch));
+            Assert.Equal("up", OrnamentService.GetParameter(ornament, OrnamentService.ParamDirection));
+            Assert.Equal(string.Empty, OrnamentService.GetParameter(ornament, "missing"));
+        }
+    }
+}
