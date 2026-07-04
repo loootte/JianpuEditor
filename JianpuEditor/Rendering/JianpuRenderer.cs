@@ -1600,7 +1600,7 @@ namespace JianpuEditor.Rendering
                 }
             }
 
-            var text = note.Type == NoteType.Rest ? "0" : note.Pitch.ToString();
+            var text = note.Type == NoteType.Rest ? "0" : JianpuPitchCodec.GetPitchDisplayText(note);
             var textSize = g.MeasureString(text, _noteFont);
             var textX = x + (headWidth - textSize.Width) / 2f;
             var textY = y + 18f;

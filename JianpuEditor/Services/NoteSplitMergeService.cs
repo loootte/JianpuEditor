@@ -317,6 +317,7 @@ namespace JianpuEditor.Services
             {
                 Type = source.Type,
                 Pitch = source.Pitch,
+                Accidental = source.Accidental,
                 Octave = source.Octave,
                 Underlines = source.Underlines,
                 Dashes = source.Dashes,

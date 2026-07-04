@@ -16,6 +16,7 @@ namespace JianpuEditor.Services.NoteEditCommands
             {
                 Type = source.Type,
                 Pitch = source.Pitch,
+                Accidental = source.Accidental,
                 Octave = source.Octave,
                 Underlines = source.Underlines,
                 Dashes = source.Dashes,
@@ -48,6 +49,7 @@ namespace JianpuEditor.Services.NoteEditCommands
 
             target.Type = source.Type;
             target.Pitch = source.Pitch;
+            target.Accidental = source.Accidental;
             target.Octave = source.Octave;
             target.Underlines = source.Underlines;
             target.Dashes = source.Dashes;

@@ -410,6 +410,7 @@ namespace JianpuEditor.ViewModels
             {
                 Type = source.Type,
                 Pitch = source.Pitch,
+                Accidental = source.Accidental,
                 Octave = source.Octave,
                 Underlines = source.Underlines,
                 Dashes = source.Dashes,
@@ -540,8 +541,10 @@ namespace JianpuEditor.ViewModels
                     continue;
                 }
 
-                if (JianpuPitchService.TryGetTransposedPitch(
-                        selected.Pitch,
+                if (JianpuPitchCodec.IsNatural(selected.Pitch)
+                    && selected.Accidental == AccidentalKind.None
+                    && JianpuPitchService.TryGetTransposedPitch(
+                        (int)Math.Round(selected.Pitch),
                         selected.Octave,
                         delta,
                         out _,
