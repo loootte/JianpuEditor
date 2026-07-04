@@ -46,16 +46,13 @@ namespace JianpuEditor.ViewModels
 
             _document.EnsureMeasures();
             var glyph = OrnamentService.GetPlaceholderGlyph(type);
-            var message = refs.Count > 1
-                ? "已为 " + refs.Count + " 个音符添加装饰音「" + glyph + "」"
-                : "已添加装饰音「" + glyph + "」";
-            var commands = BuildAddCommands(refs, type, message);
+            var commands = BuildToggleCommands(refs, type, glyph, out var description, out var message);
             if (commands.Count == 0)
             {
                 return ScoreEditResult.Unchanged;
             }
 
-            return ExecuteCommands("添加装饰音", commands, message);
+            return ExecuteCommands(description, commands, message);
         }
 
         public ScoreEditResult TryRemoveOrnamentsForSelection()
@@ -116,12 +113,16 @@ namespace JianpuEditor.ViewModels
             return ScoreEditResult.WithMessage(message);
         }
 
-        private List<INoteEditCommand> BuildAddCommands(
+        private List<INoteEditCommand> BuildToggleCommands(
             IReadOnlyList<ScoreNoteRef> refs,
             OrnamentType type,
-            string message)
+            string glyph,
+            out string description,
+            out string message)
         {
-            var commands = new List<INoteEditCommand>();
+            var pending = new List<(int MeasureIndex, List<JianpuOrnament> OldOrnaments, List<JianpuOrnament> NewOrnaments)>();
+            var addedCount = 0;
+            var removedCount = 0;
             foreach (var group in refs.GroupBy(item => item.MeasureIndex))
             {
                 if (group.Key < 0 || group.Key >= _document.Score.Measures.Count)
@@ -139,7 +140,18 @@ namespace JianpuEditor.ViewModels
                         continue;
                     }
 
-                    OrnamentService.TryAddOrnament(CreateWorkingMeasure(measure, working), noteIndex, type);
+                    var workingMeasure = CreateWorkingMeasure(measure, working);
+                    if (OrnamentService.HasOrnament(workingMeasure, noteIndex, type))
+                    {
+                        if (OrnamentService.TryRemoveForNote(workingMeasure, noteIndex, type))
+                        {
+                            removedCount++;
+                        }
+                    }
+                    else if (OrnamentService.TryAddOrnament(workingMeasure, noteIndex, type))
+                    {
+                        addedCount++;
+                    }
                 }
 
                 if (!OrnamentsChanged(oldOrnaments, working))
@@ -147,17 +159,48 @@ namespace JianpuEditor.ViewModels
                     continue;
                 }
 
+                pending.Add((group.Key, oldOrnaments, working));
+            }
+
+            description = removedCount > 0 && addedCount == 0
+                ? "删除装饰音"
+                : addedCount > 0 && removedCount == 0
+                    ? "添加装饰音"
+                    : "切换装饰音";
+            message = BuildToggleMessage(glyph, refs.Count, addedCount, removedCount);
+            var commands = new List<INoteEditCommand>();
+            foreach (var change in pending)
+            {
                 commands.Add(new ModifyMeasureOrnamentsCommand(
                     _document.Score,
                     _messenger,
-                    group.Key,
-                    oldOrnaments,
-                    working,
-                    "添加装饰音",
+                    change.MeasureIndex,
+                    change.OldOrnaments,
+                    change.NewOrnaments,
+                    description,
                     message));
             }
 
             return commands;
+        }
+
+        private static string BuildToggleMessage(string glyph, int selectionCount, int addedCount, int removedCount)
+        {
+            if (removedCount > 0 && addedCount == 0)
+            {
+                return removedCount > 1 || selectionCount > 1
+                    ? "已取消 " + removedCount + " 个音符的装饰音「" + glyph + "」"
+                    : "已取消装饰音「" + glyph + "」";
+            }
+
+            if (addedCount > 0 && removedCount == 0)
+            {
+                return addedCount > 1 || selectionCount > 1
+                    ? "已为 " + addedCount + " 个音符添加装饰音「" + glyph + "」"
+                    : "已添加装饰音「" + glyph + "」";
+            }
+
+            return "已更新装饰音「" + glyph + "」";
         }
 
         private static JianpuMeasure CreateWorkingMeasure(JianpuMeasure measure, List<JianpuOrnament> working)

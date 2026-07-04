@@ -71,6 +71,39 @@ namespace JianpuEditor.Tests.ViewModels
         }
 
         [Fact]
+        public void AddOrnament_SecondClickRemovesSameType()
+        {
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            document.EnsureMeasures();
+            document.Score.Measures[0].MelodyNotes.Add(ScoreTestHelper.Note(1));
+            selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
+            var editor = ViewModelTestHelper.CreateOrnamentEditor(document, selection, messenger, history);
+
+            editor.AddOrnament(OrnamentType.Trill);
+            var result = editor.AddOrnament(OrnamentType.Trill);
+
+            Assert.True(result.Changed);
+            Assert.Empty(document.Score.Measures[0].Ornaments);
+        }
+
+        [Fact]
+        public void AddOrnament_SecondClickRemovesOnlyMatchingType()
+        {
+            var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
+            document.EnsureMeasures();
+            document.Score.Measures[0].MelodyNotes.Add(ScoreTestHelper.Note(1));
+            OrnamentService.TryAddOrnament(document.Score.Measures[0], 0, OrnamentType.Trill);
+            OrnamentService.TryAddOrnament(document.Score.Measures[0], 0, OrnamentType.Fermata);
+            selection.UpdateFrom(new ScoreSelectionInfo { MeasureIndex = 0, NoteIndex = 0 });
+            var editor = ViewModelTestHelper.CreateOrnamentEditor(document, selection, messenger, history);
+
+            editor.AddOrnament(OrnamentType.Trill);
+
+            Assert.Single(document.Score.Measures[0].Ornaments);
+            Assert.Equal(OrnamentType.Fermata, document.Score.Measures[0].Ornaments[0].Type);
+        }
+
+        [Fact]
         public void TryRemoveOrnamentsForSelection_RemovesBoundOrnaments()
         {
             var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
