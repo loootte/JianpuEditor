@@ -1313,9 +1313,20 @@ namespace JianpuEditor.Rendering
                 return;
             }
 
-            var font = UsesLatinOrnamentFont(ornament.Type) ? _ornamentLatinFont : _ornamentFont;
-            var size = g.MeasureString(glyph, font);
             var headWidth = Math.Min(NoteCellWidth, noteWidth);
+            Font font;
+            if (topLayout != null && ornament.Type != OrnamentType.Fermata)
+            {
+                font = UsesLatinOrnamentFont(ornament.Type)
+                    ? new Font("Arial", 11f, FontStyle.Italic)
+                    : new Font("Microsoft YaHei", 11f, FontStyle.Regular);
+            }
+            else
+            {
+                font = UsesLatinOrnamentFont(ornament.Type) ? _ornamentLatinFont : _ornamentFont;
+            }
+
+            var size = g.MeasureString(glyph, font);
             float anchorX;
             float drawY;
             if (topLayout != null)
@@ -1334,6 +1345,11 @@ namespace JianpuEditor.Rendering
             using (var ink = CreateInkBrush())
             {
                 g.DrawString(glyph, font, ink, drawX, drawY);
+            }
+
+            if (!ReferenceEquals(font, _ornamentFont) && !ReferenceEquals(font, _ornamentLatinFont))
+            {
+                font.Dispose();
             }
         }
 
@@ -1978,7 +1994,7 @@ namespace JianpuEditor.Rendering
 
             using (var accidentalFont = new Font("Arial", CompactAccidentalFontSize, FontStyle.Bold))
             {
-                g.DrawString(mark, accidentalFont, ink, topLayout.AccidentalX, y + NoteTopAnnotationLayout.AccidentalY);
+                g.DrawString(mark, accidentalFont, ink, topLayout.AccidentalX, y + topLayout.AccidentalY);
             }
         }
 
@@ -1991,7 +2007,7 @@ namespace JianpuEditor.Rendering
                     g.FillEllipse(
                         ink,
                         topLayout.OctaveDotCenterX - 3,
-                        y + NoteTopAnnotationLayout.OctaveDotBaseY + i * 10,
+                        y + topLayout.OctaveDotBaseY + i * NoteTopAnnotationLayout.OctaveDotStackSpacing,
                         (int)NoteTopAnnotationLayout.OctaveDotDiameter,
                         (int)NoteTopAnnotationLayout.OctaveDotDiameter);
                 }

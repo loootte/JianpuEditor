@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using JianpuEditor.Models;
 using JianpuEditor.Services;
@@ -8,13 +9,7 @@ namespace JianpuEditor.Rendering
     {
         private const float AccidentalLeftPadding = 2f;
 
-        private const float AccidentalRightPadding = 2f;
-
-        private const float AccidentalMarkWidth = 8f;
-
-        private const float OctaveLeftOffset = 12f;
-
-        private const float OctaveRightOffset = 8f;
+        private const float AccidentalToOctaveGap = 4f;
 
         public static NoteTopAnnotationLayout Plan(
             JianpuNote note,
@@ -27,7 +22,9 @@ namespace JianpuEditor.Rendering
             var layout = new NoteTopAnnotationLayout
             {
                 HeadCenterX = headCenterX,
-                OctaveDotCenterX = headCenterX - 3f
+                OctaveDotCenterX = headCenterX - 3f,
+                OrnamentY = NoteTopAnnotationLayout.OrnamentBandYWithoutLowerLayers,
+                FermataY = NoteTopAnnotationLayout.FermataBandY
             };
 
             if (note == null || note.Type == NoteType.Rest)
@@ -36,8 +33,9 @@ namespace JianpuEditor.Rendering
             }
 
             AnalyzeOrnaments(ornaments, layout);
-            PlaceAccidental(note, noteX, headWidth, compactAccidentals, layout);
-            PlaceOctaveDots(note, noteX, headWidth, layout);
+            PlaceAccidental(note, noteX, compactAccidentals, layout);
+            PlaceOctaveDots(note, layout);
+            PlaceOrnamentBands(layout);
             return layout;
         }
 
@@ -100,7 +98,6 @@ namespace JianpuEditor.Rendering
         private static void PlaceAccidental(
             JianpuNote note,
             int noteX,
-            int headWidth,
             bool compactAccidentals,
             NoteTopAnnotationLayout layout)
         {
@@ -111,64 +108,52 @@ namespace JianpuEditor.Rendering
 
             layout.HasAccidental = true;
             layout.AccidentalKind = note.Accidental;
-            var leftX = noteX + AccidentalLeftPadding;
-            var rightX = noteX + headWidth - AccidentalMarkWidth - AccidentalRightPadding;
-            var preferLeft = note.Accidental == AccidentalKind.Sharp;
-            var leftBlocked = layout.HasGraceOrnament;
-            var rightBlocked = false;
-
-            if (preferLeft && !leftBlocked)
-            {
-                layout.AccidentalX = leftX;
-                return;
-            }
-
-            if (!preferLeft && !rightBlocked)
-            {
-                layout.AccidentalX = rightX;
-                return;
-            }
-
-            layout.AccidentalX = preferLeft ? rightX : leftX;
+            layout.AccidentalX = noteX + AccidentalLeftPadding;
+            layout.AccidentalY = NoteTopAnnotationLayout.AccidentalBandY;
         }
 
-        private static void PlaceOctaveDots(
-            JianpuNote note,
-            int noteX,
-            int headWidth,
-            NoteTopAnnotationLayout layout)
+        private static void PlaceOctaveDots(JianpuNote note, NoteTopAnnotationLayout layout)
         {
             if (note.Octave <= 0)
             {
                 return;
             }
 
-            var headCenterX = noteX + headWidth / 2f;
-            var centerBlocked = layout.HasCenterOrnament || layout.HasFermata;
-            var leftBlocked = layout.HasGraceOrnament
-                || (layout.HasAccidental && layout.AccidentalX <= noteX + 4f);
-            var rightBlocked = layout.HasAccidental
-                && layout.AccidentalX >= noteX + headWidth - AccidentalMarkWidth - 4f;
+            layout.HasHighOctaveDots = true;
+            layout.OctaveDotBaseY = layout.HasAccidental
+                ? NoteTopAnnotationLayout.OctaveDotBandY
+                : NoteTopAnnotationLayout.OctaveDotBandYWithoutAccidental;
 
-            if (!centerBlocked && !leftBlocked)
+            if (layout.HasAccidental)
             {
-                layout.OctaveDotCenterX = headCenterX - 3f;
-                return;
+                var minCenterX = layout.AccidentalX
+                    + NoteTopAnnotationLayout.AccidentalMarkWidth
+                    + AccidentalToOctaveGap
+                    + NoteTopAnnotationLayout.OctaveDotDiameter / 2f;
+                layout.OctaveDotCenterX = Math.Max(layout.HeadCenterX - 3f, minCenterX);
+            }
+            else
+            {
+                layout.OctaveDotCenterX = layout.HeadCenterX - 3f;
+            }
+        }
+
+        private static void PlaceOrnamentBands(NoteTopAnnotationLayout layout)
+        {
+            var hasUpperOrnament = layout.HasGraceOrnament || layout.HasCenterOrnament;
+            var hasLowerLayers = layout.HasAccidental || layout.HasHighOctaveDots;
+
+            if (hasUpperOrnament)
+            {
+                layout.OrnamentY = hasLowerLayers || layout.HasFermata
+                    ? NoteTopAnnotationLayout.DefaultOrnamentBandY
+                    : NoteTopAnnotationLayout.OrnamentBandYWithoutLowerLayers;
             }
 
-            if (!rightBlocked)
+            if (layout.HasFermata)
             {
-                layout.OctaveDotCenterX = headCenterX + OctaveRightOffset;
-                return;
+                layout.FermataY = NoteTopAnnotationLayout.FermataBandY;
             }
-
-            if (!leftBlocked)
-            {
-                layout.OctaveDotCenterX = headCenterX - OctaveLeftOffset;
-                return;
-            }
-
-            layout.OctaveDotCenterX = headCenterX + OctaveRightOffset;
         }
     }
 }
