@@ -12,6 +12,8 @@ namespace JianpuEditor.Models
 
         public List<LyricSyllable> LyricSyllables { get; set; } = new List<LyricSyllable>();
 
+        public List<JianpuOrnament> Ornaments { get; set; } = new List<JianpuOrnament>();
+
         public string LyricText { get; set; } = string.Empty;
     }
 }

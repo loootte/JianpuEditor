@@ -31,12 +31,14 @@ namespace JianpuEditor.Services
                 ImportLegacyChordMarkers(score, token["Measures"] as JArray);
                 ChordMarkerService.NormalizeScore(score);
                 LyricSyllableService.NormalizeScore(score);
+                OrnamentService.NormalizeScore(score);
                 return score;
             }
 
             var legacyScore = MigrateLegacyScore(token);
             ChordMarkerService.NormalizeScore(legacyScore);
             LyricSyllableService.NormalizeScore(legacyScore);
+            OrnamentService.NormalizeScore(legacyScore);
             return legacyScore;
         }
 

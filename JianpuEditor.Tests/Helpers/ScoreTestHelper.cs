@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using JianpuEditor.Models;
+using JianpuEditor.Services;
 
 namespace JianpuEditor.Tests.Helpers
 {
@@ -69,6 +71,30 @@ namespace JianpuEditor.Tests.Helpers
                 });
             }
 
+            return measure;
+        }
+
+        public static JianpuMeasure MeasureWithOrnaments(
+            OrnamentType[] types,
+            int[] noteIndices,
+            Dictionary<string, string>[] parameters,
+            params JianpuNote[] notes)
+        {
+            var measure = Measure(notes);
+            measure.Ornaments = new List<JianpuOrnament>();
+            for (var i = 0; i < types.Length; i++)
+            {
+                measure.Ornaments.Add(new JianpuOrnament
+                {
+                    Type = types[i],
+                    NoteIndex = noteIndices[i],
+                    Parameters = parameters != null && i < parameters.Length && parameters[i] != null
+                        ? new Dictionary<string, string>(parameters[i])
+                        : new Dictionary<string, string>()
+                });
+            }
+
+            OrnamentService.NormalizeMeasure(measure);
             return measure;
         }
 
