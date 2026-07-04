@@ -30,6 +30,8 @@ namespace JianpuEditor.Rendering
         private readonly Font _rowLabelFont = new Font("Microsoft YaHei", 9f, FontStyle.Regular);
         private readonly Font _ornamentFont = new Font("Microsoft YaHei", 10f, FontStyle.Regular);
         private readonly Font _ornamentLatinFont = new Font("Arial", 10f, FontStyle.Italic);
+        private readonly Font _ornamentStackedFont = new Font("Microsoft YaHei", 11f, FontStyle.Regular);
+        private readonly Font _ornamentLatinStackedFont = new Font("Arial", 11f, FontStyle.Italic);
         private readonly Font _noteFont = new Font("Arial", 26f, FontStyle.Bold);
         private readonly Font _secondaryFont = new Font("Arial", 20f, FontStyle.Bold);
         private bool _disposed;
@@ -67,6 +69,8 @@ namespace JianpuEditor.Rendering
             _rowLabelFont.Dispose();
             _ornamentFont.Dispose();
             _ornamentLatinFont.Dispose();
+            _ornamentStackedFont.Dispose();
+            _ornamentLatinStackedFont.Dispose();
             _noteFont.Dispose();
             _secondaryFont.Dispose();
             _disposed = true;
@@ -408,6 +412,79 @@ namespace JianpuEditor.Rendering
             return bitmap;
         }
 
+        public int GetStaffLineCount(JianpuScore score, int width, ScoreLayoutOptions options = null)
+        {
+            options = options ?? ScoreLayoutOptions.Default;
+            return BuildLayout(score, width, options).Lines.Count;
+        }
+
+        public Bitmap RenderPdfPageToBitmap(
+            JianpuScore score,
+            int width,
+            ScoreLayoutOptions options,
+            PdfPageSlice slice)
+        {
+            options = options ?? ScoreLayoutOptions.PdfExport;
+            slice = slice ?? new PdfPageSlice { PageNumber = 1, TotalPages = 1 };
+            var layout = BuildLayout(score, width, options);
+            if (layout.Lines.Count == 0 || slice.LineCount <= 0)
+            {
+                var emptyHeight = slice.PageNumber == 1
+                    ? GetMarginTop(options)
+                    : PdfPagePlanner.CompactHeaderHeight;
+                emptyHeight += PdfPagePlanner.BottomMargin;
+                var emptyBitmap = new Bitmap(Math.Max(1, width), Math.Max(1, emptyHeight));
+                using (var g = Graphics.FromImage(emptyBitmap))
+                {
+                    g.Clear(AppTheme.GetScoreBackground(false));
+                    if (slice.PageNumber == 1)
+                    {
+                        DrawHeader(g, score, width, options);
+                    }
+                    else
+                    {
+                        DrawPdfContinuationHeader(g, score, width, slice);
+                    }
+                }
+
+                return emptyBitmap;
+            }
+
+            var start = Math.Max(0, slice.FirstLineIndex);
+            var count = Math.Min(slice.LineCount, layout.Lines.Count - start);
+            var firstLine = layout.Lines[start];
+            var lastLine = layout.Lines[start + count - 1];
+            var contentHeight = lastLine.BlockTop + StaffBlockHeight - firstLine.BlockTop;
+            var headerHeight = slice.PageNumber == 1
+                ? GetMarginTop(options)
+                : PdfPagePlanner.CompactHeaderHeight;
+            var bitmapHeight = headerHeight + contentHeight + PdfPagePlanner.BottomMargin;
+            var bitmap = new Bitmap(width, Math.Max(1, bitmapHeight));
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                _activeLayoutOptions = options;
+                g.Clear(AppTheme.GetScoreBackground(false));
+                if (slice.PageNumber == 1)
+                {
+                    DrawHeader(g, score, width, options);
+                }
+                else
+                {
+                    DrawPdfContinuationHeader(g, score, width, slice);
+                }
+
+                g.TranslateTransform(0, headerHeight - firstLine.BlockTop);
+                DrawRowLabelsForBlock(g, firstLine.BlockTop);
+                DrawStaffLineRange(g, score, layout, start, count, options);
+                DrawTiesForLineRange(g, score, layout, start, count, -1);
+                _activeLayoutOptions = null;
+            }
+
+            return bitmap;
+        }
+
         public static Rectangle GetNoteBounds(MeasureLayout measure, int noteIndex)
         {
             return new Rectangle(
@@ -486,6 +563,24 @@ namespace JianpuEditor.Rendering
         public static int GetLyricRowTop(MeasureLayout measure)
         {
             return GetSecondaryRowTop(measure) + SecondaryRowHeight + RowGap;
+        }
+
+        private void DrawPdfContinuationHeader(Graphics g, JianpuScore score, int width, PdfPageSlice slice)
+        {
+            var title = string.IsNullOrWhiteSpace(score.Title) ? "未命名乐曲" : score.Title.Trim();
+            var pageText = title + "    第 " + slice.PageNumber + " / " + slice.TotalPages + " 页";
+            using (var font = new Font("Microsoft YaHei", 14f, FontStyle.Regular))
+            using (var ink = CreateInkBrush())
+            {
+                g.DrawString(pageText, font, ink, MarginLeft, 12f);
+            }
+        }
+
+        private void DrawRowLabelsForBlock(Graphics g, int blockTop)
+        {
+            DrawRowLabel(g, "主旋律", blockTop + 28);
+            DrawRowLabel(g, "副旋律", blockTop + MelodyRowHeight + RowGap + 10);
+            DrawRowLabel(g, "歌词", blockTop + MelodyRowHeight + RowGap + SecondaryRowHeight + RowGap + 8);
         }
 
         private void DrawHeader(Graphics g, JianpuScore score, int width, ScoreLayoutOptions options)
@@ -696,9 +791,71 @@ namespace JianpuEditor.Rendering
             IReadOnlyList<ScoreNoteRef> selectedNotes,
             ScoreLayoutOptions layoutOptions)
         {
+            DrawStaffLineRange(
+                g,
+                score,
+                layout,
+                0,
+                layout.Lines.Count,
+                selectedMeasureIndex,
+                selectedNoteIndex,
+                selectedInsertIndex,
+                selectedMeasureIndices,
+                selectedChordMeasureIndex,
+                selectedChordMarkerIndex,
+                selectedNotes,
+                layoutOptions);
+            DrawTiesForLineRange(g, score, layout, 0, layout.Lines.Count, selectedTieIndex);
+        }
+
+        private void DrawStaffLineRange(
+            Graphics g,
+            JianpuScore score,
+            ScoreLayout layout,
+            int firstLineIndex,
+            int lineCount,
+            ScoreLayoutOptions layoutOptions)
+        {
+            DrawStaffLineRange(
+                g,
+                score,
+                layout,
+                firstLineIndex,
+                lineCount,
+                -1,
+                -1,
+                -1,
+                null,
+                -1,
+                -1,
+                null,
+                layoutOptions);
+        }
+
+        private void DrawStaffLineRange(
+            Graphics g,
+            JianpuScore score,
+            ScoreLayout layout,
+            int firstLineIndex,
+            int lineCount,
+            int selectedMeasureIndex,
+            int selectedNoteIndex,
+            int selectedInsertIndex,
+            IReadOnlyList<int> selectedMeasureIndices,
+            int selectedChordMeasureIndex,
+            int selectedChordMarkerIndex,
+            IReadOnlyList<ScoreNoteRef> selectedNotes,
+            ScoreLayoutOptions layoutOptions)
+        {
             layoutOptions = layoutOptions ?? ScoreLayoutOptions.Default;
+            var visibleMeasures = BuildVisibleMeasures(layout, firstLineIndex, lineCount);
             foreach (var measure in layout.Measures)
             {
+                if (!visibleMeasures.Contains(measure))
+                {
+                    continue;
+                }
+
                 var measureData = score.Measures[measure.MeasureIndex];
                 var isInSelection = IsMeasureSelected(measure.MeasureIndex, selectedMeasureIndices, selectedMeasureIndex);
                 var hasSelectedNotes = selectedNotes != null && selectedNotes.Count > 0;
@@ -741,8 +898,107 @@ namespace JianpuEditor.Rendering
                 DrawBarLine(g, measure.X, measure.BlockTop, StaffBlockHeight);
                 DrawBarLine(g, measure.BarLineX, measure.BlockTop, StaffBlockHeight);
             }
+        }
 
-            DrawTies(g, score, layout, selectedTieIndex);
+        private static HashSet<MeasureLayout> BuildVisibleMeasures(ScoreLayout layout, int firstLineIndex, int lineCount)
+        {
+            var visibleMeasures = new HashSet<MeasureLayout>();
+            if (layout?.Lines == null || lineCount <= 0)
+            {
+                return visibleMeasures;
+            }
+
+            var endLine = Math.Min(layout.Lines.Count, firstLineIndex + lineCount);
+            for (var lineIndex = Math.Max(0, firstLineIndex); lineIndex < endLine; lineIndex++)
+            {
+                var line = layout.Lines[lineIndex];
+                if (line.Measures == null)
+                {
+                    continue;
+                }
+
+                foreach (var measure in line.Measures)
+                {
+                    visibleMeasures.Add(measure);
+                }
+            }
+
+            return visibleMeasures;
+        }
+
+        private void DrawTiesForLineRange(
+            Graphics g,
+            JianpuScore score,
+            ScoreLayout layout,
+            int firstLineIndex,
+            int lineCount,
+            int selectedTieIndex)
+        {
+            if (score.Ties == null || score.Ties.Count == 0)
+            {
+                return;
+            }
+
+            var visibleMeasures = BuildVisibleMeasures(layout, firstLineIndex, lineCount);
+            for (var i = 0; i < score.Ties.Count; i++)
+            {
+                var tie = score.Ties[i];
+                var startLayout = FindMeasureLayout(layout, tie.StartMeasureIndex);
+                var endLayout = FindMeasureLayout(layout, tie.EndMeasureIndex);
+                if (startLayout == null
+                    || endLayout == null
+                    || !visibleMeasures.Contains(startLayout)
+                    || !visibleMeasures.Contains(endLayout))
+                {
+                    continue;
+                }
+
+                if (!TryGetTieGeometry(score, layout, tie, out var geometry))
+                {
+                    continue;
+                }
+
+                var isSelected = i == selectedTieIndex;
+                if (isSelected)
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(48, 66, 133, 244)))
+                    using (var path = new GraphicsPath())
+                    {
+                        path.AddBezier(
+                            geometry.X1,
+                            geometry.BaseY,
+                            geometry.X1,
+                            geometry.ArchTop,
+                            geometry.X2,
+                            geometry.ArchTop,
+                            geometry.X2,
+                            geometry.BaseY);
+                        g.FillPath(brush, path);
+                    }
+                }
+
+                var color = isSelected ? AppTheme.TieActive : AppTheme.TieInactive;
+                var width = isSelected ? 3f : 2f;
+                using (var pen = new Pen(color, width))
+                {
+                    if (isSelected)
+                    {
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+                    }
+
+                    g.DrawBezier(
+                        pen,
+                        geometry.X1,
+                        geometry.BaseY,
+                        geometry.X1,
+                        geometry.ArchTop,
+                        geometry.X2,
+                        geometry.ArchTop,
+                        geometry.X2,
+                        geometry.BaseY);
+                }
+            }
         }
 
         private ScoreHitResult HitTestTies(JianpuScore score, ScoreLayout layout, Point point)
@@ -977,6 +1233,8 @@ namespace JianpuEditor.Rendering
 
                 DrawNote(
                     g,
+                    measure,
+                    i,
                     measure.MelodyNotes[i],
                     noteX,
                     layout.BlockTop,
@@ -1014,10 +1272,30 @@ namespace JianpuEditor.Rendering
             foreach (var group in grouped)
             {
                 GetNoteDrawBounds(layout, group.Key, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
+                var noteOrnaments = NoteTopAnnotationPlanner.GetOrnamentsForNote(measure, group.Key);
+                NoteTopAnnotationLayout topLayout = null;
+                if (_activeLayoutOptions != null && _activeLayoutOptions.CompactAccidentalGlyphs)
+                {
+                    topLayout = NoteTopAnnotationPlanner.Plan(
+                        measure.MelodyNotes[group.Key],
+                        noteX,
+                        Math.Min(NoteCellWidth, noteWidth),
+                        noteOrnaments,
+                        true);
+                }
+
                 var stackIndex = 0;
                 foreach (var ornament in group)
                 {
-                    DrawOrnamentGlyph(g, ornament, noteX, noteWidth, layout.BlockTop, stackIndex, group.Count());
+                    DrawOrnamentGlyph(
+                        g,
+                        ornament,
+                        noteX,
+                        noteWidth,
+                        layout.BlockTop,
+                        stackIndex,
+                        group.Count(),
+                        topLayout);
                     stackIndex++;
                 }
             }
@@ -1030,7 +1308,8 @@ namespace JianpuEditor.Rendering
             int noteWidth,
             int rowTop,
             int stackIndex,
-            int stackCount)
+            int stackCount,
+            NoteTopAnnotationLayout topLayout = null)
         {
             var glyph = OrnamentService.GetPlaceholderGlyph(ornament.Type);
             if (string.IsNullOrEmpty(glyph))
@@ -1038,12 +1317,28 @@ namespace JianpuEditor.Rendering
                 return;
             }
 
-            var font = UsesLatinOrnamentFont(ornament.Type) ? _ornamentLatinFont : _ornamentFont;
+            var headWidth = Math.Min(NoteCellWidth, noteWidth);
+            var useStackedOrnamentFont = topLayout != null && ornament.Type != OrnamentType.Fermata;
+            var font = UsesLatinOrnamentFont(ornament.Type)
+                ? useStackedOrnamentFont ? _ornamentLatinStackedFont : _ornamentLatinFont
+                : useStackedOrnamentFont ? _ornamentStackedFont : _ornamentFont;
+
             var size = g.MeasureString(glyph, font);
-            var anchorX = GetOrnamentAnchorX(ornament.Type, noteX, noteWidth);
+            float anchorX;
+            float drawY;
+            if (topLayout != null)
+            {
+                anchorX = topLayout.GetOrnamentAnchorX(ornament.Type, noteX, headWidth);
+                drawY = rowTop + topLayout.GetOrnamentY(ornament.Type);
+            }
+            else
+            {
+                anchorX = GetOrnamentAnchorX(ornament.Type, noteX, noteWidth);
+                drawY = rowTop + GetOrnamentTopOffset(ornament.Type);
+            }
+
             var totalWidth = stackCount * size.Width + Math.Max(0, stackCount - 1) * 2f;
             var drawX = anchorX - totalWidth / 2f + stackIndex * (size.Width + 2f);
-            var drawY = rowTop + GetOrnamentTopOffset(ornament.Type);
             using (var ink = CreateInkBrush())
             {
                 g.DrawString(glyph, font, ink, drawX, drawY);
@@ -1583,9 +1878,28 @@ namespace JianpuEditor.Rendering
             }
         }
 
-        private void DrawNote(Graphics g, JianpuNote note, int x, int y, int noteWidth, bool isSelected)
+        private const float CompactAccidentalFontSize = 10f;
+
+        private void DrawNote(
+            Graphics g,
+            JianpuMeasure measure,
+            int noteIndex,
+            JianpuNote note,
+            int x,
+            int y,
+            int noteWidth,
+            bool isSelected)
         {
             var headWidth = Math.Min(NoteCellWidth, noteWidth);
+            var useTopLayout = _activeLayoutOptions != null && _activeLayoutOptions.CompactAccidentalGlyphs;
+            NoteTopAnnotationLayout topLayout = null;
+            if (useTopLayout && note != null && note.Type == NoteType.Note)
+            {
+                var ornaments = measure == null
+                    ? new List<JianpuOrnament>()
+                    : NoteTopAnnotationPlanner.GetOrnamentsForNote(measure, noteIndex);
+                topLayout = NoteTopAnnotationPlanner.Plan(note, x, headWidth, ornaments, true);
+            }
 
             if (isSelected)
             {
@@ -1600,54 +1914,155 @@ namespace JianpuEditor.Rendering
                 }
             }
 
-            var text = note.Type == NoteType.Rest ? "0" : JianpuPitchCodec.GetPitchDisplayText(note);
-            var textSize = g.MeasureString(text, _noteFont);
-            var textX = x + (headWidth - textSize.Width) / 2f;
-            var textY = y + 18f;
             using (var ink = CreateInkBrush())
             using (var inkPen = CreateInkPen(2f))
             {
-                g.DrawString(text, _noteFont, ink, textX, textY);
-
                 var headCenterX = x + headWidth / 2f;
-
-                if (note.Octave > 0)
+                if (note.Type == NoteType.Rest)
                 {
-                    for (var i = 0; i < note.Octave; i++)
-                    {
-                        g.FillEllipse(ink, headCenterX - 3, y + 4 + i * 10, 6, 6);
-                    }
+                    DrawCenteredNoteText(g, "0", x, y, headWidth, _noteFont, ink);
                 }
-                else if (note.Octave < 0)
+                else if (topLayout != null)
                 {
-                    for (var i = 0; i < Math.Abs(note.Octave); i++)
-                    {
-                        g.FillEllipse(ink, headCenterX - 3, y + 52 + i * 10, 6, 6);
-                    }
-                }
-
-                if (note.Dotted)
-                {
-                    var dotX = Math.Min(x + headWidth - 8, headCenterX + 12);
-                    g.FillEllipse(ink, dotX, y + 42, 5, 5);
-                }
-
-                var extensionWidth = noteWidth - headWidth;
-                if (extensionWidth > 0 && note.Dashes > 0)
-                {
-                    for (var i = 0; i < note.Dashes; i++)
-                    {
-                        var dashX = x + headWidth + (extensionWidth * (i + 1)) / (note.Dashes + 1) - 4;
-                        g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
-                    }
+                    DrawCenteredNoteText(g, JianpuPitchCodec.GetDisplayDegree(note).ToString(), x, y, headWidth, _noteFont, ink);
+                    DrawCompactAccidentalMark(g, note, y, topLayout, ink);
                 }
                 else
                 {
-                    for (var i = 0; i < note.Dashes; i++)
-                    {
-                        var dashX = x + headWidth - 8 + i * 12;
-                        g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
-                    }
+                    DrawCenteredNoteText(
+                        g,
+                        JianpuPitchCodec.GetPitchDisplayText(note),
+                        x,
+                        y,
+                        headWidth,
+                        _noteFont,
+                        ink);
+                }
+
+                if (topLayout != null)
+                {
+                    DrawNoteOctaveDots(g, note, y, topLayout, ink);
+                }
+                else
+                {
+                    DrawNoteOctaveDots(g, note, x, y, headCenterX, ink);
+                }
+                DrawNoteDottedAndDashes(g, note, x, y, noteWidth, headWidth, headCenterX, ink, inkPen);
+            }
+        }
+
+        private void DrawCenteredNoteText(
+            Graphics g,
+            string text,
+            int x,
+            int y,
+            int headWidth,
+            Font font,
+            Brush ink)
+        {
+            var textSize = g.MeasureString(text, font);
+            var textX = x + (headWidth - textSize.Width) / 2f;
+            var textY = y + 18f;
+            g.DrawString(text, font, ink, textX, textY);
+        }
+
+        private void DrawCompactAccidentalMark(
+            Graphics g,
+            JianpuNote note,
+            int y,
+            NoteTopAnnotationLayout topLayout,
+            Brush ink)
+        {
+            if (topLayout == null || !topLayout.HasAccidental)
+            {
+                return;
+            }
+
+            var mark = JianpuPitchCodec.GetAccidentalMark(note);
+            if (string.IsNullOrEmpty(mark))
+            {
+                return;
+            }
+
+            using (var accidentalFont = new Font("Arial", CompactAccidentalFontSize, FontStyle.Bold))
+            {
+                g.DrawString(mark, accidentalFont, ink, topLayout.AccidentalX, y + topLayout.AccidentalY);
+            }
+        }
+
+        private void DrawNoteOctaveDots(Graphics g, JianpuNote note, int y, NoteTopAnnotationLayout topLayout, Brush ink)
+        {
+            if (note.Octave > 0)
+            {
+                for (var i = 0; i < note.Octave; i++)
+                {
+                    g.FillEllipse(
+                        ink,
+                        topLayout.OctaveDotCenterX - 3,
+                        y + topLayout.OctaveDotBaseY + i * NoteTopAnnotationLayout.OctaveDotStackSpacing,
+                        (int)NoteTopAnnotationLayout.OctaveDotDiameter,
+                        (int)NoteTopAnnotationLayout.OctaveDotDiameter);
+                }
+            }
+            else if (note.Octave < 0)
+            {
+                for (var i = 0; i < Math.Abs(note.Octave); i++)
+                {
+                    g.FillEllipse(ink, topLayout.HeadCenterX - 3, y + 52 + i * 10, 6, 6);
+                }
+            }
+        }
+
+        private void DrawNoteOctaveDots(Graphics g, JianpuNote note, int x, int y, float headCenterX, Brush ink)
+        {
+            if (note.Octave > 0)
+            {
+                for (var i = 0; i < note.Octave; i++)
+                {
+                    g.FillEllipse(ink, headCenterX - 3, y + 4 + i * 10, 6, 6);
+                }
+            }
+            else if (note.Octave < 0)
+            {
+                for (var i = 0; i < Math.Abs(note.Octave); i++)
+                {
+                    g.FillEllipse(ink, headCenterX - 3, y + 52 + i * 10, 6, 6);
+                }
+            }
+        }
+
+        private void DrawNoteDottedAndDashes(
+            Graphics g,
+            JianpuNote note,
+            int x,
+            int y,
+            int noteWidth,
+            int headWidth,
+            float headCenterX,
+            Brush ink,
+            Pen inkPen)
+        {
+            if (note.Dotted)
+            {
+                var dotX = Math.Min(x + headWidth - 8, headCenterX + 12);
+                g.FillEllipse(ink, dotX, y + 42, 5, 5);
+            }
+
+            var extensionWidth = noteWidth - headWidth;
+            if (extensionWidth > 0 && note.Dashes > 0)
+            {
+                for (var i = 0; i < note.Dashes; i++)
+                {
+                    var dashX = x + headWidth + (extensionWidth * (i + 1)) / (note.Dashes + 1) - 4;
+                    g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < note.Dashes; i++)
+                {
+                    var dashX = x + headWidth - 8 + i * 12;
+                    g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
                 }
             }
         }

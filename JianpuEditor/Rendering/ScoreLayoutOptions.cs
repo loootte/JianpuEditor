@@ -7,7 +7,8 @@ namespace JianpuEditor.Rendering
         public static readonly ScoreLayoutOptions Editor = new ScoreLayoutOptions
         {
             ChordMarkersTextOnly = true,
-            ShowChordEditorAffordances = true
+            ShowChordEditorAffordances = true,
+            CompactAccidentalGlyphs = true
         };
 
         public static readonly ScoreLayoutOptions PdfExport = new ScoreLayoutOptions
@@ -20,6 +21,7 @@ namespace JianpuEditor.Rendering
             MetaFontSize = 18f,
             HeaderMetaLeftAligned = true,
             ChordMarkersTextOnly = true,
+            CompactAccidentalGlyphs = true,
             RespectAppTheme = false
         };
 
@@ -49,5 +51,8 @@ namespace JianpuEditor.Rendering
 
         /// <summary>为 false 时（如 PDF 导出）始终使用浅色纸面。</summary>
         public bool RespectAppTheme { get; set; } = true;
+
+        /// <summary>编辑器与 PDF：音符上方标注分层排布（升降号、高音点、装饰音纵向叠放）。</summary>
+        public bool CompactAccidentalGlyphs { get; set; }
     }
 }

@@ -50,17 +50,28 @@ namespace JianpuEditor.Services
             }
 
             var degree = GetDisplayDegree(note);
+            var mark = GetAccidentalMark(note);
+            return mark == null ? degree.ToString() : mark + degree;
+        }
+
+        public static string GetAccidentalMark(JianpuNote note)
+        {
+            if (note == null || note.Type == NoteType.Rest)
+            {
+                return null;
+            }
+
             if (note.Accidental == AccidentalKind.Sharp)
             {
-                return "#" + degree;
+                return "#";
             }
 
             if (note.Accidental == AccidentalKind.Flat)
             {
-                return "b" + degree;
+                return "b";
             }
 
-            return degree.ToString();
+            return null;
         }
 
         public static bool IsValidMelodyPitch(JianpuNote note)
