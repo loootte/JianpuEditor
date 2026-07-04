@@ -187,5 +187,28 @@ namespace JianpuEditor.ViewModels
 
             return (SelectedMeasureIndices.Min(), SelectedMeasureIndices.Max());
         }
+
+        public bool TryGetContiguousMeasureRange(out int fromIndex, out int toIndex)
+        {
+            fromIndex = Math.Max(0, MeasureIndex);
+            toIndex = fromIndex;
+            if (SelectedMeasureIndices == null || SelectedMeasureIndices.Count <= 1)
+            {
+                return false;
+            }
+
+            var sorted = SelectedMeasureIndices.OrderBy(index => index).ToList();
+            for (var i = 1; i < sorted.Count; i++)
+            {
+                if (sorted[i] - sorted[i - 1] != 1)
+                {
+                    return false;
+                }
+            }
+
+            fromIndex = sorted[0];
+            toIndex = sorted[sorted.Count - 1];
+            return toIndex > fromIndex;
+        }
     }
 }

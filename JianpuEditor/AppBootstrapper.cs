@@ -24,6 +24,7 @@ namespace JianpuEditor
             services.AddSingleton<IMidiImportService, MidiImportServiceAdapter>();
             services.AddSingleton<ISampleLibraryService, SampleLibraryServiceAdapter>();
             services.AddSingleton<IChordTransposeService, ChordTransposeServiceAdapter>();
+            services.AddSingleton<IHarmonySuggestionService, HarmonySuggestionServiceAdapter>();
             services.AddSingleton<ScoreDocumentViewModel>();
             services.AddSingleton<ScoreSelectionViewModel>();
             services.AddSingleton<NoteEditorViewModel>();

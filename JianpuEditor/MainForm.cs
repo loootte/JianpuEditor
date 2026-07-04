@@ -252,6 +252,7 @@ namespace JianpuEditor
                 (s, e) => ExecuteAddMeasureWithPlaceholders()));
             editMenu.DropDownItems.Add(CreateMenuItem("复制小节", Keys.None, (s, e) => ExecuteDuplicateMeasures()));
             editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
+            editMenu.DropDownItems.Add(CreateMenuItem("和弦建议...", Keys.None, (s, e) => ShowHarmonySuggestionDialog()));
             editMenu.DropDownItems.Add(CreateMenuItem("批量编辑歌词...", Keys.None, (s, e) => ShowBulkLyricEditDialog()));
             var ornamentMenu = new ToolStripMenuItem("装饰音");
             ornamentMenu.DropDownItems.Add(CreateMenuItem(
@@ -1148,6 +1149,75 @@ namespace JianpuEditor
             _glue?.Dispose();
             _binder?.Dispose();
             _viewModel.Dispose();
+        }
+
+        private void ShowHarmonySuggestionDialog()
+        {
+            _viewModel.Document.EnsureMeasures();
+            if (_viewModel.Selection.TryGetContiguousMeasureRange(out var fromIndex, out var toIndex))
+            {
+                ShowHarmonyProgressionSuggestionDialog(fromIndex, toIndex);
+                return;
+            }
+
+            var measureIndex = _viewModel.Selection.HasChordSelected
+                ? _viewModel.Selection.ChordMeasureIndex
+                : Math.Max(0, _viewModel.Selection.MeasureIndex);
+            if (measureIndex < 0)
+            {
+                measureIndex = 0;
+            }
+
+            var beatPosition = _viewModel.ChordEditor.ResolveSuggestionBeat(measureIndex);
+            var suggestions = _viewModel.ChordEditor.GetHarmonySuggestions(measureIndex, beatPosition);
+            if (suggestions == null || suggestions.Count == 0)
+            {
+                MessageBox.Show("当前位置无法生成和弦建议。", "和弦建议", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var dialog = new Views.HarmonySuggestionDialog(
+                measureIndex + 1,
+                beatPosition,
+                _viewModel.Document.KeySignature,
+                suggestions))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedSuggestion == null)
+                {
+                    return;
+                }
+
+                ExecuteScoreEdit(() => _viewModel.ChordEditor.ApplyHarmonySuggestion(
+                    measureIndex,
+                    beatPosition,
+                    dialog.SelectedSuggestion.ChordSymbol));
+            }
+        }
+
+        private void ShowHarmonyProgressionSuggestionDialog(int fromIndex, int toIndex)
+        {
+            var suggestions = _viewModel.ChordEditor.GetHarmonyProgressionSuggestions(fromIndex, toIndex);
+            if (suggestions == null || suggestions.Count == 0)
+            {
+                MessageBox.Show("当前选区无法生成和弦进行建议。", "和弦建议", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var dialog = new Views.HarmonyProgressionSuggestionDialog(
+                fromIndex + 1,
+                toIndex + 1,
+                _viewModel.Document.KeySignature,
+                suggestions))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedSuggestion == null)
+                {
+                    return;
+                }
+
+                ExecuteScoreEdit(() => _viewModel.ChordEditor.ApplyHarmonyProgressionSuggestion(
+                    dialog.SelectedSuggestion,
+                    fromIndex));
+            }
         }
 
         private void ShowBulkLyricEditDialog()
