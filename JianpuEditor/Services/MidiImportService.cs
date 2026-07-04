@@ -42,7 +42,7 @@ namespace JianpuEditor.Services
                 ? track.TempoChanges[0].Bpm
                 : 120;
             var tonicMidi = DetectTonicMidi(notes);
-            var keySignature = "1=" + TonicNames[tonicMidi % 12];
+            var keySignature = KeySignatureService.FormatKeySignature(tonicMidi % 12);
             var measures = BuildMeasures(notes, tonicMidi, ScoreMidiSchedule.DefaultMeasureBeats);
             measures = MeasureNormalizationService.NormalizeMeasures(measures, ScoreMidiSchedule.DefaultMeasureBeats);
 
