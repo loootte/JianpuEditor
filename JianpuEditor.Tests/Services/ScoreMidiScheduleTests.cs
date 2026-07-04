@@ -1,3 +1,4 @@
+using System.Linq;
 using JianpuEditor.Models;
 using JianpuEditor.Rendering;
 using JianpuEditor.Services;
@@ -66,6 +67,23 @@ namespace JianpuEditor.Tests.Services
 
             Assert.Single(melodyNotes);
             Assert.Equal(3, melodyNotes[0].DurationQuarter, 3);
+        }
+
+        [Theory]
+        [InlineData("1=B", 71)]
+        [InlineData("1=C", 60)]
+        [InlineData("1=C#", 61)]
+        [InlineData("1=Bb", 70)]
+        [InlineData("B", 71)]
+        public void Build_KeySignaturesIncludingB_DoNotThrowAndMapTonic(string keySignature, int expectedTonicMidi)
+        {
+            var score = ScoreTestHelper.CreateScore(ScoreTestHelper.Measure(ScoreTestHelper.Note(1)));
+            score.KeySignature = keySignature;
+
+            var schedule = ScoreMidiSchedule.Build(score);
+            var melody = schedule.Notes.Single(note => note.Channel == ScoreMidiSchedule.MelodyChannel);
+
+            Assert.Equal(expectedTonicMidi, melody.MidiNote);
         }
 
         [Theory]
