@@ -251,6 +251,24 @@ namespace JianpuEditor
             editMenu.DropDownItems.Add(CreateMenuItem("复制小节", Keys.None, (s, e) => ExecuteDuplicateMeasures()));
             editMenu.DropDownItems.Add(CreateMenuItem("和弦转调...", Keys.None, (s, e) => ShowTransposeDialog()));
             editMenu.DropDownItems.Add(CreateMenuItem("批量编辑歌词...", Keys.None, (s, e) => ShowBulkLyricEditDialog()));
+            var ornamentMenu = new ToolStripMenuItem("装饰音");
+            ornamentMenu.DropDownItems.Add(CreateMenuItem(
+                "倚音",
+                Keys.None,
+                (s, e) => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.GraceNote))));
+            ornamentMenu.DropDownItems.Add(CreateMenuItem(
+                "颤音",
+                Keys.None,
+                (s, e) => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.Trill))));
+            ornamentMenu.DropDownItems.Add(CreateMenuItem(
+                "回音",
+                Keys.None,
+                (s, e) => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.Turn))));
+            ornamentMenu.DropDownItems.Add(CreateMenuItem(
+                "延长",
+                Keys.None,
+                (s, e) => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.Fermata))));
+            editMenu.DropDownItems.Add(ornamentMenu);
             editMenu.DropDownItems.Add(CreateMenuItem("清空谱面", Keys.None, OnClearScore));
 
             var viewMenu = new ToolStripMenuItem("视图");
@@ -314,6 +332,13 @@ namespace JianpuEditor
             panel.Controls.Add(CreateToolButton("减时-", () => ExecuteNoteEdit(() => _viewModel.NoteEditor.DecreaseDuration())));
             _tieButton = CreateToolButton("连音线", () => _viewModel.TieEditor.ToggleTieModeCommand.Execute(null));
             panel.Controls.Add(_tieButton);
+            panel.Controls.Add(CreateSeparator());
+
+            panel.Controls.Add(new Label { Text = "装饰:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });
+            panel.Controls.Add(CreateToolButton("倚音", () => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.GraceNote))));
+            panel.Controls.Add(CreateToolButton("颤音", () => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.Trill))));
+            panel.Controls.Add(CreateToolButton("回音", () => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.Turn))));
+            panel.Controls.Add(CreateToolButton("延长", () => ExecuteScoreEdit(() => _viewModel.OrnamentEditor.AddOrnament(OrnamentType.Fermata))));
             panel.Controls.Add(CreateSeparator());
 
             panel.Controls.Add(new Label { Text = "当前小节:", AutoSize = true, Margin = new Padding(0, 10, 6, 0) });

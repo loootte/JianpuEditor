@@ -53,6 +53,53 @@ namespace JianpuEditor.Tests.Services
         }
 
         [Fact]
+        public void TryAddOrnament_ReplacesSameTypeOnSameNote()
+        {
+            var measure = ScoreTestHelper.Measure(ScoreTestHelper.Note(1), ScoreTestHelper.Note(2));
+            OrnamentService.TryAddOrnament(measure, 1, OrnamentType.Trill);
+            OrnamentService.TryAddOrnament(measure, 1, OrnamentType.Trill);
+
+            Assert.Single(measure.Ornaments);
+            Assert.Equal(OrnamentType.Trill, measure.Ornaments[0].Type);
+            Assert.Equal(1, measure.Ornaments[0].NoteIndex);
+        }
+
+        [Fact]
+        public void TryRemoveForNote_RemovesAllOrnamentsOnNote()
+        {
+            var measure = ScoreTestHelper.Measure(ScoreTestHelper.Note(1), ScoreTestHelper.Note(2));
+            OrnamentService.TryAddOrnament(measure, 0, OrnamentType.Trill);
+            OrnamentService.TryAddOrnament(measure, 0, OrnamentType.Turn);
+
+            Assert.True(OrnamentService.TryRemoveForNote(measure, 0));
+            Assert.Empty(measure.Ornaments);
+        }
+
+        [Fact]
+        public void OnNoteRemoved_ShiftsLaterNoteIndices()
+        {
+            var measure = ScoreTestHelper.Measure(
+                ScoreTestHelper.Note(1),
+                ScoreTestHelper.Note(2),
+                ScoreTestHelper.Note(3));
+            OrnamentService.TryAddOrnament(measure, 2, OrnamentType.Fermata);
+
+            OrnamentService.OnNoteRemoved(measure, 0);
+
+            Assert.Single(measure.Ornaments);
+            Assert.Equal(1, measure.Ornaments[0].NoteIndex);
+        }
+
+        [Fact]
+        public void GetPlaceholderGlyph_ReturnsToolbarLabel()
+        {
+            Assert.Equal("倚", OrnamentService.GetPlaceholderGlyph(OrnamentType.GraceNote));
+            Assert.Equal("tr", OrnamentService.GetPlaceholderGlyph(OrnamentType.Trill));
+            Assert.Equal("回", OrnamentService.GetPlaceholderGlyph(OrnamentType.Turn));
+            Assert.Equal("延", OrnamentService.GetPlaceholderGlyph(OrnamentType.Fermata));
+        }
+
+        [Fact]
         public void GetParameter_ReturnsStoredValue()
         {
             var ornament = new JianpuOrnament

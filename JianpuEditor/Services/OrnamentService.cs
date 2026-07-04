@@ -82,6 +82,154 @@ namespace JianpuEditor.Services
             return ornament.Parameters.TryGetValue(key, out var value) ? value ?? string.Empty : string.Empty;
         }
 
+        public static List<JianpuOrnament> CloneOrnaments(IReadOnlyList<JianpuOrnament> ornaments)
+        {
+            var clone = new List<JianpuOrnament>();
+            if (ornaments == null)
+            {
+                return clone;
+            }
+
+            foreach (var ornament in ornaments)
+            {
+                if (ornament == null)
+                {
+                    continue;
+                }
+
+                clone.Add(new JianpuOrnament
+                {
+                    Type = ornament.Type,
+                    NoteIndex = ornament.NoteIndex,
+                    BeatPosition = ornament.BeatPosition,
+                    Parameters = CloneParameters(ornament.Parameters)
+                });
+            }
+
+            return clone;
+        }
+
+        public static bool HasOrnament(JianpuMeasure measure, int noteIndex, OrnamentType type)
+        {
+            NormalizeMeasure(measure);
+            if (noteIndex < 0 || noteIndex >= (measure?.MelodyNotes?.Count ?? 0))
+            {
+                return false;
+            }
+
+            return measure.Ornaments.Any(item => item.NoteIndex == noteIndex && item.Type == type);
+        }
+
+        public static bool HasAnyOrnament(JianpuMeasure measure, int noteIndex)
+        {
+            NormalizeMeasure(measure);
+            if (noteIndex < 0 || noteIndex >= (measure?.MelodyNotes?.Count ?? 0))
+            {
+                return false;
+            }
+
+            return measure.Ornaments.Any(item => item.NoteIndex == noteIndex);
+        }
+
+        public static bool TryAddOrnament(JianpuMeasure measure, int noteIndex, OrnamentType type)
+        {
+            if (measure == null || type == OrnamentType.Unknown)
+            {
+                return false;
+            }
+
+            NormalizeMeasure(measure);
+            if (noteIndex < 0 || noteIndex >= (measure.MelodyNotes?.Count ?? 0))
+            {
+                return false;
+            }
+
+            var existingIndex = measure.Ornaments.FindIndex(item => item.NoteIndex == noteIndex && item.Type == type);
+            if (existingIndex >= 0)
+            {
+                measure.Ornaments[existingIndex] = new JianpuOrnament
+                {
+                    Type = type,
+                    NoteIndex = noteIndex,
+                    BeatPosition = LyricSyllableService.GetNoteBeatPosition(measure, noteIndex)
+                };
+            }
+            else
+            {
+                measure.Ornaments.Add(new JianpuOrnament
+                {
+                    Type = type,
+                    NoteIndex = noteIndex,
+                    BeatPosition = LyricSyllableService.GetNoteBeatPosition(measure, noteIndex)
+                });
+            }
+
+            TrimAndSort(measure);
+            return true;
+        }
+
+        public static bool TryRemoveForNote(JianpuMeasure measure, int noteIndex, OrnamentType? type = null)
+        {
+            if (measure == null)
+            {
+                return false;
+            }
+
+            NormalizeMeasure(measure);
+            if (noteIndex < 0 || noteIndex >= (measure.MelodyNotes?.Count ?? 0))
+            {
+                return false;
+            }
+
+            var removed = measure.Ornaments.RemoveAll(item =>
+                item.NoteIndex == noteIndex && (!type.HasValue || item.Type == type.Value));
+            if (removed > 0)
+            {
+                TrimAndSort(measure);
+                return true;
+            }
+
+            return false;
+        }
+
+        public static void OnNoteRemoved(JianpuMeasure measure, int removedNoteIndex)
+        {
+            if (measure?.Ornaments == null || measure.Ornaments.Count == 0)
+            {
+                return;
+            }
+
+            measure.Ornaments.RemoveAll(item => item.NoteIndex == removedNoteIndex);
+            foreach (var ornament in measure.Ornaments)
+            {
+                if (ornament.NoteIndex > removedNoteIndex)
+                {
+                    ornament.NoteIndex--;
+                }
+            }
+
+            TrimAndSort(measure);
+        }
+
+        public static string GetPlaceholderGlyph(OrnamentType type)
+        {
+            switch (type)
+            {
+                case OrnamentType.GraceNote:
+                    return "倚";
+                case OrnamentType.Trill:
+                    return "tr";
+                case OrnamentType.Turn:
+                    return "回";
+                case OrnamentType.Fermata:
+                    return "延";
+                case OrnamentType.Mordent:
+                    return "波";
+                default:
+                    return type.ToString();
+            }
+        }
+
         private static void TrimAndSort(JianpuMeasure measure)
         {
             var duration = ScoreMidiSchedule.GetMeasureDurationUnits(measure);
@@ -115,11 +263,14 @@ namespace JianpuEditor.Services
                 normalized.Add(clone);
             }
 
-            measure.Ornaments = normalized
-                .OrderBy(item => item.BeatPosition)
-                .ThenBy(item => item.NoteIndex)
-                .ThenBy(item => item.Type)
-                .ToList();
+            measure.Ornaments.Clear();
+            foreach (var ornament in normalized
+                         .OrderBy(item => item.BeatPosition)
+                         .ThenBy(item => item.NoteIndex)
+                         .ThenBy(item => item.Type))
+            {
+                measure.Ornaments.Add(ornament);
+            }
         }
 
         private static Dictionary<string, string> CloneParameters(Dictionary<string, string> parameters)
