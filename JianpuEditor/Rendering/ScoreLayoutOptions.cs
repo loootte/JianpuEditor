@@ -20,6 +20,7 @@ namespace JianpuEditor.Rendering
             MetaFontSize = 18f,
             HeaderMetaLeftAligned = true,
             ChordMarkersTextOnly = true,
+            CompactAccidentalGlyphs = true,
             RespectAppTheme = false
         };
 
@@ -49,5 +50,8 @@ namespace JianpuEditor.Rendering
 
         /// <summary>为 false 时（如 PDF 导出）始终使用浅色纸面。</summary>
         public bool RespectAppTheme { get; set; } = true;
+
+        /// <summary>PDF 导出：升降号缩小并角标显示，避免窄音符与相邻音符重叠。</summary>
+        public bool CompactAccidentalGlyphs { get; set; }
     }
 }

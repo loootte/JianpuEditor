@@ -1835,6 +1835,17 @@ namespace JianpuEditor.Rendering
             }
         }
 
+        private const float CompactAccidentalFontSize = 10f;
+
+        private bool ShouldUseCompactAccidentalGlyphs(JianpuNote note)
+        {
+            return _activeLayoutOptions != null
+                && _activeLayoutOptions.CompactAccidentalGlyphs
+                && note != null
+                && note.Type == NoteType.Note
+                && note.Accidental != AccidentalKind.None;
+        }
+
         private void DrawNote(Graphics g, JianpuNote note, int x, int y, int noteWidth, bool isSelected)
         {
             var headWidth = Math.Min(NoteCellWidth, noteWidth);
@@ -1852,54 +1863,120 @@ namespace JianpuEditor.Rendering
                 }
             }
 
-            var text = note.Type == NoteType.Rest ? "0" : JianpuPitchCodec.GetPitchDisplayText(note);
-            var textSize = g.MeasureString(text, _noteFont);
-            var textX = x + (headWidth - textSize.Width) / 2f;
-            var textY = y + 18f;
             using (var ink = CreateInkBrush())
             using (var inkPen = CreateInkPen(2f))
             {
-                g.DrawString(text, _noteFont, ink, textX, textY);
-
                 var headCenterX = x + headWidth / 2f;
-
-                if (note.Octave > 0)
+                if (note.Type == NoteType.Rest)
                 {
-                    for (var i = 0; i < note.Octave; i++)
-                    {
-                        g.FillEllipse(ink, headCenterX - 3, y + 4 + i * 10, 6, 6);
-                    }
+                    DrawCenteredNoteText(g, "0", x, y, headWidth, _noteFont, ink);
                 }
-                else if (note.Octave < 0)
+                else if (ShouldUseCompactAccidentalGlyphs(note))
                 {
-                    for (var i = 0; i < Math.Abs(note.Octave); i++)
-                    {
-                        g.FillEllipse(ink, headCenterX - 3, y + 52 + i * 10, 6, 6);
-                    }
-                }
-
-                if (note.Dotted)
-                {
-                    var dotX = Math.Min(x + headWidth - 8, headCenterX + 12);
-                    g.FillEllipse(ink, dotX, y + 42, 5, 5);
-                }
-
-                var extensionWidth = noteWidth - headWidth;
-                if (extensionWidth > 0 && note.Dashes > 0)
-                {
-                    for (var i = 0; i < note.Dashes; i++)
-                    {
-                        var dashX = x + headWidth + (extensionWidth * (i + 1)) / (note.Dashes + 1) - 4;
-                        g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
-                    }
+                    DrawCompactAccidentalNote(g, note, x, y, headWidth, ink);
                 }
                 else
                 {
-                    for (var i = 0; i < note.Dashes; i++)
-                    {
-                        var dashX = x + headWidth - 8 + i * 12;
-                        g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
-                    }
+                    DrawCenteredNoteText(
+                        g,
+                        JianpuPitchCodec.GetPitchDisplayText(note),
+                        x,
+                        y,
+                        headWidth,
+                        _noteFont,
+                        ink);
+                }
+
+                DrawNoteOctaveDots(g, note, x, y, headCenterX, ink);
+                DrawNoteDottedAndDashes(g, note, x, y, noteWidth, headWidth, headCenterX, ink, inkPen);
+            }
+        }
+
+        private void DrawCenteredNoteText(
+            Graphics g,
+            string text,
+            int x,
+            int y,
+            int headWidth,
+            Font font,
+            Brush ink)
+        {
+            var textSize = g.MeasureString(text, font);
+            var textX = x + (headWidth - textSize.Width) / 2f;
+            var textY = y + 18f;
+            g.DrawString(text, font, ink, textX, textY);
+        }
+
+        private void DrawCompactAccidentalNote(Graphics g, JianpuNote note, int x, int y, int headWidth, Brush ink)
+        {
+            var degreeText = JianpuPitchCodec.GetDisplayDegree(note).ToString();
+            DrawCenteredNoteText(g, degreeText, x, y, headWidth, _noteFont, ink);
+
+            var mark = JianpuPitchCodec.GetAccidentalMark(note);
+            if (string.IsNullOrEmpty(mark))
+            {
+                return;
+            }
+
+            using (var accidentalFont = new Font("Arial", CompactAccidentalFontSize, FontStyle.Bold))
+            {
+                var markSize = g.MeasureString(mark, accidentalFont);
+                var markX = x + headWidth - markSize.Width - 2f;
+                var markY = y + 4f;
+                g.DrawString(mark, accidentalFont, ink, markX, markY);
+            }
+        }
+
+        private void DrawNoteOctaveDots(Graphics g, JianpuNote note, int x, int y, float headCenterX, Brush ink)
+        {
+            if (note.Octave > 0)
+            {
+                for (var i = 0; i < note.Octave; i++)
+                {
+                    g.FillEllipse(ink, headCenterX - 3, y + 4 + i * 10, 6, 6);
+                }
+            }
+            else if (note.Octave < 0)
+            {
+                for (var i = 0; i < Math.Abs(note.Octave); i++)
+                {
+                    g.FillEllipse(ink, headCenterX - 3, y + 52 + i * 10, 6, 6);
+                }
+            }
+        }
+
+        private void DrawNoteDottedAndDashes(
+            Graphics g,
+            JianpuNote note,
+            int x,
+            int y,
+            int noteWidth,
+            int headWidth,
+            float headCenterX,
+            Brush ink,
+            Pen inkPen)
+        {
+            if (note.Dotted)
+            {
+                var dotX = Math.Min(x + headWidth - 8, headCenterX + 12);
+                g.FillEllipse(ink, dotX, y + 42, 5, 5);
+            }
+
+            var extensionWidth = noteWidth - headWidth;
+            if (extensionWidth > 0 && note.Dashes > 0)
+            {
+                for (var i = 0; i < note.Dashes; i++)
+                {
+                    var dashX = x + headWidth + (extensionWidth * (i + 1)) / (note.Dashes + 1) - 4;
+                    g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < note.Dashes; i++)
+                {
+                    var dashX = x + headWidth - 8 + i * 12;
+                    g.DrawLine(inkPen, dashX, y + 36, dashX + 8, y + 36);
                 }
             }
         }
