@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using JianpuEditor.Models;
 using JianpuEditor.Rendering;
 
@@ -62,6 +63,7 @@ namespace JianpuEditor.Services
 
             foreach (var measure in measures)
             {
+                MelodyChordService.NormalizeMeasure(measure);
                 total += GetMeasureDurationUnits(measure);
             }
 
@@ -94,7 +96,9 @@ namespace JianpuEditor.Services
             var measures = score.Measures ?? new List<JianpuMeasure>();
             for (var measureIndex = 0; measureIndex < measures.Count; measureIndex++)
             {
-                var notes = measures[measureIndex].MelodyNotes;
+                var measure = measures[measureIndex];
+                MelodyChordService.NormalizeMeasure(measure);
+                var notes = measure.MelodyNotes;
                 if (notes == null)
                 {
                     continue;
@@ -102,8 +106,8 @@ namespace JianpuEditor.Services
 
                 for (var noteIndex = 0; noteIndex < notes.Count; noteIndex++)
                 {
-                    var note = notes[noteIndex];
-                    var duration = JianpuRenderer.GetDurationUnits(note);
+                    var slotNote = notes[noteIndex];
+                    var duration = JianpuRenderer.GetDurationUnits(slotNote);
                     var position = new NotePosition(measureIndex, noteIndex);
 
                     if (suppressed.Contains(position))
@@ -112,22 +116,43 @@ namespace JianpuEditor.Services
                         continue;
                     }
 
-                    if (note.Type == NoteType.Rest || !JianpuPitchCodec.IsValidMelodyPitch(note))
+                    var chordNotes = MelodyChordService.GetNotesAtSlot(measure, noteIndex);
+                    var playableNotes = chordNotes
+                        .Where(note => note.Type == NoteType.Note && JianpuPitchCodec.IsValidMelodyPitch(note))
+                        .ToList();
+                    if (playableNotes.Count == 0)
                     {
                         quarterTime += duration;
                         continue;
                     }
 
                     var totalDuration = duration + GetTieExtension(score, position, tieExtensionCache);
-                    events.AddRange(OrnamentPlaybackService.ScheduleMelodyNote(
-                        measures[measureIndex],
-                        note,
-                        noteIndex,
-                        quarterTime,
-                        totalDuration,
-                        tonicMidi,
-                        MelodyChannel,
-                        MelodyVelocity));
+                    if (playableNotes.Count == 1)
+                    {
+                        events.AddRange(OrnamentPlaybackService.ScheduleMelodyNote(
+                            measure,
+                            playableNotes[0],
+                            noteIndex,
+                            quarterTime,
+                            totalDuration,
+                            tonicMidi,
+                            MelodyChannel,
+                            MelodyVelocity));
+                    }
+                    else
+                    {
+                        foreach (var note in playableNotes)
+                        {
+                            events.Add(new ScheduledMidiNote
+                            {
+                                StartQuarter = quarterTime,
+                                DurationQuarter = totalDuration,
+                                MidiNote = ToMelodyMidiNote(note, tonicMidi),
+                                Channel = MelodyChannel,
+                                Velocity = MelodyVelocity
+                            });
+                        }
+                    }
 
                     quarterTime += duration;
                 }

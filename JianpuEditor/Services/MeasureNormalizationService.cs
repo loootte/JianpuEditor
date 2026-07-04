@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using JianpuEditor.Models;
 using JianpuEditor.Rendering;
 
@@ -18,50 +19,58 @@ namespace JianpuEditor.Services
                 return new List<JianpuMeasure> { CreateMeasure() };
             }
 
-            var notes = FlattenNotes(measures);
-            if (notes.Count == 0)
+            var slots = FlattenChordSlots(measures);
+            if (slots.Count == 0)
             {
                 return new List<JianpuMeasure> { CreateMeasure() };
             }
 
-            var normalized = RebuildMeasures(notes, measureBeats);
+            var normalized = RebuildMeasures(slots, measureBeats);
             MergeShortTrailingMeasure(normalized, measureBeats);
             return normalized;
         }
 
-        private static List<JianpuNote> FlattenNotes(IReadOnlyList<JianpuMeasure> measures)
+        private static List<ChordSlot> FlattenChordSlots(IReadOnlyList<JianpuMeasure> measures)
         {
-            var notes = new List<JianpuNote>();
+            var slots = new List<ChordSlot>();
             foreach (var measure in measures)
             {
-                if (measure?.MelodyNotes == null)
+                if (measure == null)
                 {
                     continue;
                 }
 
-                foreach (var note in measure.MelodyNotes)
+                MelodyChordService.NormalizeMeasure(measure);
+                for (var i = 0; i < measure.Chords.Count; i++)
                 {
-                    if (note == null)
+                    var chord = measure.Chords[i];
+                    if (chord?.Notes == null || chord.Notes.Count == 0)
                     {
                         continue;
                     }
 
-                    notes.Add(CloneNote(note));
+                    slots.Add(new ChordSlot
+                    {
+                        Notes = chord.Notes.Select(CloneNote).ToList(),
+                        BeatPosition = chord.BeatPosition,
+                        Text = chord.Text ?? string.Empty
+                    });
                 }
             }
 
-            return notes;
+            return slots;
         }
 
-        private static List<JianpuMeasure> RebuildMeasures(IReadOnlyList<JianpuNote> notes, int measureBeats)
+        private static List<JianpuMeasure> RebuildMeasures(IReadOnlyList<ChordSlot> slots, int measureBeats)
         {
             var measures = new List<JianpuMeasure>();
             var current = CreateMeasure();
             var used = 0.0;
 
-            foreach (var note in notes)
+            foreach (var slot in slots)
             {
-                var remaining = JianpuRenderer.GetDurationUnits(note);
+                var primary = slot.Notes.FirstOrDefault(note => note.Type == NoteType.Note) ?? slot.Notes[0];
+                var remaining = JianpuRenderer.GetDurationUnits(primary);
                 while (remaining > DurationEpsilon)
                 {
                     var room = measureBeats - used;
@@ -75,14 +84,25 @@ namespace JianpuEditor.Services
                     }
 
                     var take = Math.Min(remaining, room);
-                    var piece = CreateDurationSlice(note, take);
-                    if (piece == null)
+                    var sliceNotes = new List<JianpuNote>();
+                    foreach (var source in slot.Notes)
+                    {
+                        var piece = CreateDurationSlice(source, take);
+                        if (piece != null)
+                        {
+                            sliceNotes.Add(piece);
+                        }
+                    }
+
+                    if (sliceNotes.Count == 0)
                     {
                         break;
                     }
 
-                    current.MelodyNotes.Add(piece);
-                    used += JianpuRenderer.GetDurationUnits(piece);
+                    MelodyChordService.AppendChord(
+                        current,
+                        MelodyChordService.CreateChord(used, sliceNotes, slot.Text));
+                    used += take;
                     remaining -= take;
                 }
             }
@@ -122,9 +142,19 @@ namespace JianpuEditor.Services
                 return;
             }
 
-            foreach (var note in last.MelodyNotes)
+            foreach (var chord in last.Chords)
             {
-                previous.MelodyNotes.Add(note);
+                if (chord == null)
+                {
+                    continue;
+                }
+
+                MelodyChordService.AppendChord(
+                    previous,
+                    MelodyChordService.CreateChord(
+                        MelodyChordService.GetMeasureDurationUnits(previous),
+                        chord.Notes,
+                        chord.Text));
             }
 
             measures.RemoveAt(measures.Count - 1);
@@ -142,7 +172,11 @@ namespace JianpuEditor.Services
                     break;
                 }
 
-                measure.MelodyNotes.Add(rest);
+                MelodyChordService.AppendChord(
+                    measure,
+                    MelodyChordService.CreateChord(
+                        MelodyChordService.GetMeasureDurationUnits(measure),
+                        new[] { rest }));
                 gap -= JianpuRenderer.GetDurationUnits(rest);
             }
         }
@@ -204,8 +238,18 @@ namespace JianpuEditor.Services
             return new JianpuMeasure
             {
                 MelodyNotes = new List<JianpuNote>(),
+                Chords = new List<JianpuChord>(),
                 LyricText = " "
             };
+        }
+
+        private sealed class ChordSlot
+        {
+            public List<JianpuNote> Notes { get; set; } = new List<JianpuNote>();
+
+            public double BeatPosition { get; set; }
+
+            public string Text { get; set; } = string.Empty;
         }
     }
 }

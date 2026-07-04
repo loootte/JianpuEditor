@@ -29,6 +29,7 @@ namespace JianpuEditor.Services
                 };
                 var score = JsonConvert.DeserializeObject<JianpuScore>(json, settings) ?? CreateEmptyScore();
                 ImportLegacyChordMarkers(score, token["Measures"] as JArray);
+                MelodyChordService.NormalizeScore(score);
                 ChordMarkerService.NormalizeScore(score);
                 LyricSyllableService.NormalizeScore(score);
                 OrnamentService.NormalizeScore(score);
@@ -36,6 +37,7 @@ namespace JianpuEditor.Services
             }
 
             var legacyScore = MigrateLegacyScore(token);
+            MelodyChordService.NormalizeScore(legacyScore);
             ChordMarkerService.NormalizeScore(legacyScore);
             LyricSyllableService.NormalizeScore(legacyScore);
             OrnamentService.NormalizeScore(legacyScore);

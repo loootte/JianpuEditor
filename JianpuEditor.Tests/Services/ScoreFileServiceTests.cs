@@ -117,6 +117,39 @@ namespace JianpuEditor.Tests.Services
         }
 
         [Fact]
+        public void Load_MigratesLegacyMelodyNotesToChords()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "jianpu-legacy-chords-" + Guid.NewGuid() + ".json");
+            var json = @"{
+  ""Title"": ""Legacy Chords"",
+  ""KeySignature"": ""1=C"",
+  ""Measures"": [
+    {
+      ""MelodyNotes"": [{ ""Pitch"": 1 }, { ""Pitch"": 2 }],
+      ""LyricText"": ""测试""
+    }
+  ]
+}";
+
+            try
+            {
+                File.WriteAllText(path, json);
+                var loaded = ScoreFileService.Load(path);
+
+                Assert.Equal(2, loaded.Measures[0].Chords.Count);
+                Assert.Single(loaded.Measures[0].Chords[0].Notes);
+                Assert.Equal(1, loaded.Measures[0].Chords[0].Notes[0].Pitch, 3);
+            }
+            finally
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        [Fact]
         public void Load_PreservesLegacyScoreWithoutOrnaments()
         {
             var path = Path.Combine(Path.GetTempPath(), "jianpu-legacy-ornaments-" + Guid.NewGuid() + ".json");

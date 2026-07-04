@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using JianpuEditor.Models;
 
 namespace JianpuEditor.Services
@@ -16,18 +17,32 @@ namespace JianpuEditor.Services
             {
                 LyricText = source.LyricText ?? string.Empty,
                 MelodyNotes = new List<JianpuNote>(),
+                Chords = new List<JianpuChord>(),
                 ChordMarkers = new List<ChordMarker>(),
                 LyricSyllables = new List<LyricSyllable>(),
                 Ornaments = new List<JianpuOrnament>()
             };
 
-            if (source.MelodyNotes != null)
+            MelodyChordService.NormalizeMeasure(source);
+            if (source.Chords != null)
             {
-                foreach (var note in source.MelodyNotes)
+                foreach (var chord in source.Chords)
                 {
-                    clone.MelodyNotes.Add(CloneNote(note));
+                    if (chord == null)
+                    {
+                        continue;
+                    }
+
+                    clone.Chords.Add(new JianpuChord
+                    {
+                        BeatPosition = chord.BeatPosition,
+                        Text = chord.Text ?? string.Empty,
+                        Notes = chord.Notes?.Select(CloneNote).ToList() ?? new List<JianpuNote>()
+                    });
                 }
             }
+
+            MelodyChordService.SyncMelodyNotesFromChords(clone);
 
             if (source.ChordMarkers != null)
             {
