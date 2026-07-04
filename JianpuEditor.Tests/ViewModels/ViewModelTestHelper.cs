@@ -72,6 +72,7 @@ namespace JianpuEditor.Tests.ViewModels
             MeasureNavigationViewModel navigation,
             IAppMessenger messenger,
             IChordTransposeService transposeService = null,
+            IHarmonySuggestionService harmonySuggestionService = null,
             IEditCommandHistory history = null)
         {
             return new ChordEditorViewModel(
@@ -79,6 +80,7 @@ namespace JianpuEditor.Tests.ViewModels
                 selection,
                 navigation,
                 transposeService ?? new ChordTransposeServiceAdapter(),
+                harmonySuggestionService ?? new HarmonySuggestionServiceAdapter(),
                 history ?? CreateHistory(messenger),
                 messenger);
         }
@@ -144,6 +146,7 @@ namespace JianpuEditor.Tests.ViewModels
                 selection,
                 measureNavigation,
                 new ChordTransposeServiceAdapter(),
+                new HarmonySuggestionServiceAdapter(),
                 history,
                 messenger);
             var ornamentEditor = new OrnamentEditorViewModel(document, selection, history, messenger);
@@ -192,6 +195,7 @@ namespace JianpuEditor.Tests.ViewModels
                 selection,
                 measureNavigation,
                 new ChordTransposeServiceAdapter(),
+                new HarmonySuggestionServiceAdapter(),
                 history,
                 messenger);
             var ornamentEditor = new OrnamentEditorViewModel(document, selection, history, messenger);

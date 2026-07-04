@@ -50,7 +50,7 @@ namespace JianpuEditor.Tests.ViewModels
             var (document, selection, messenger, history) = ViewModelTestHelper.CreateDocumentWithSelection();
             var navigation = ViewModelTestHelper.CreateMeasureNavigation(document, selection, messenger, history);
             var transpose = new FakeChordTransposeService();
-            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, navigation, messenger, transpose, history);
+            var chordEditor = ViewModelTestHelper.CreateChordEditor(document, selection, navigation, messenger, transpose, history: history);
             document.EnsureMeasures();
             document.KeySignature = "1=C";
             document.Score.Measures[0].ChordMarkers.Add(new ChordMarker { Text = "C", BeatPosition = 0 });
