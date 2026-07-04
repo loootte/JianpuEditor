@@ -67,7 +67,7 @@ namespace JianpuEditor.Services.NoteEditCommands
         public void Execute()
         {
             var measure = _score.Measures[_measureIndex];
-            measure.MelodyNotes.Insert(_insertIndex, NoteEditState.CloneNote(_note));
+            MelodyChordService.InsertSlot(measure, _insertIndex, NoteEditState.CloneNote(_note));
             _resetPendingModifiers();
             PublishEdit(_message);
         }
@@ -75,11 +75,7 @@ namespace JianpuEditor.Services.NoteEditCommands
         public void Undo()
         {
             var measure = _score.Measures[_measureIndex];
-            if (_insertIndex >= 0 && _insertIndex < measure.MelodyNotes.Count)
-            {
-                measure.MelodyNotes.RemoveAt(_insertIndex);
-            }
-
+            MelodyChordService.RemoveSlot(measure, _insertIndex);
             PublishEdit("已撤回: " + Description);
         }
 

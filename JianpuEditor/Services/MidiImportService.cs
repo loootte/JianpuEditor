@@ -42,7 +42,7 @@ namespace JianpuEditor.Services
                 ? track.TempoChanges[0].Bpm
                 : 120;
             var tonicMidi = DetectTonicMidi(notes);
-            var keySignature = "1=" + TonicNames[tonicMidi % 12];
+            var keySignature = KeySignatureService.FormatKeySignature(tonicMidi % 12);
             var measures = BuildMeasures(notes, tonicMidi, ScoreMidiSchedule.DefaultMeasureBeats);
             measures = MeasureNormalizationService.NormalizeMeasures(measures, ScoreMidiSchedule.DefaultMeasureBeats);
 
@@ -173,38 +173,64 @@ namespace JianpuEditor.Services
             var measureStart = 0.0;
             var cursor = 0.0;
 
-            foreach (var note in notes)
+            foreach (var group in GroupNotesByStart(notes))
             {
-                if (note.StartQuarter > cursor + DurationEpsilon)
-                {
-                    AppendRests(current, note.StartQuarter - cursor, ref measureStart, measureBeats, measures, ref current, ref cursor);
-                }
-
-                if (!TryMidiToJianpu(
-                        note.MidiNote,
-                        tonicMidi,
-                        out var pitch,
-                        out var octave,
-                        out var accidental,
-                        out _))
+                if (group.Count == 0)
                 {
                     continue;
                 }
 
-                var jianpuNote = CreateNote(pitch, accidental, octave, note.DurationQuarter);
-                if (jianpuNote == null)
+                var groupStart = group[0].StartQuarter;
+                if (groupStart > cursor + DurationEpsilon)
+                {
+                    AppendRests(current, groupStart - cursor, ref measureStart, measureBeats, measures, ref current, ref cursor);
+                }
+
+                var jianpuNotes = new List<JianpuNote>();
+                var durationUnits = 0.0;
+                foreach (var note in group)
+                {
+                    if (!TryMidiToJianpu(
+                            note.MidiNote,
+                            tonicMidi,
+                            out var pitch,
+                            out var octave,
+                            out var accidental,
+                            out _))
+                    {
+                        continue;
+                    }
+
+                    var jianpuNote = CreateNote(pitch, accidental, octave, note.DurationQuarter);
+                    if (jianpuNote == null)
+                    {
+                        continue;
+                    }
+
+                    jianpuNotes.Add(jianpuNote);
+                    durationUnits = Math.Max(durationUnits, JianpuRenderer.GetDurationUnits(jianpuNote));
+                }
+
+                if (jianpuNotes.Count == 0)
                 {
                     continue;
+                }
+
+                foreach (var jianpuNote in jianpuNotes)
+                {
+                    ApplyDurationUnits(jianpuNote, durationUnits);
                 }
 
                 var measureUsed = cursor - measureStart;
-                if (measureUsed + JianpuRenderer.GetDurationUnits(jianpuNote) > measureBeats + DurationEpsilon)
+                if (measureUsed + durationUnits > measureBeats + DurationEpsilon)
                 {
                     AppendRests(current, measureBeats - measureUsed, ref measureStart, measureBeats, measures, ref current, ref cursor);
                 }
 
-                current.MelodyNotes.Add(jianpuNote);
-                cursor += JianpuRenderer.GetDurationUnits(jianpuNote);
+                var beatPosition = cursor - measureStart;
+                var chord = MelodyChordService.CreateChord(beatPosition, jianpuNotes);
+                MelodyChordService.AppendChord(current, chord);
+                cursor += durationUnits;
             }
 
             if (current.MelodyNotes.Count > 0)
@@ -218,6 +244,33 @@ namespace JianpuEditor.Services
             }
 
             return measures;
+        }
+
+        private static List<List<ImportedNote>> GroupNotesByStart(IReadOnlyList<ImportedNote> notes)
+        {
+            var groups = new List<List<ImportedNote>>();
+            if (notes == null || notes.Count == 0)
+            {
+                return groups;
+            }
+
+            List<ImportedNote> current = null;
+            double? currentStart = null;
+            foreach (var note in notes)
+            {
+                if (current == null || Math.Abs(note.StartQuarter - currentStart.Value) > DurationEpsilon)
+                {
+                    current = new List<ImportedNote> { note };
+                    groups.Add(current);
+                    currentStart = note.StartQuarter;
+                }
+                else
+                {
+                    current.Add(note);
+                }
+            }
+
+            return groups;
         }
 
         private static void AppendRests(
@@ -248,7 +301,11 @@ namespace JianpuEditor.Services
                     break;
                 }
 
-                current.MelodyNotes.Add(rest);
+                MelodyChordService.AppendChord(
+                    current,
+                    MelodyChordService.CreateChord(
+                        cursor - measureStart,
+                        new[] { rest }));
                 var units = JianpuRenderer.GetDurationUnits(rest);
                 cursor += units;
                 gap -= units;
@@ -260,6 +317,7 @@ namespace JianpuEditor.Services
             return new JianpuMeasure
             {
                 MelodyNotes = new List<JianpuNote>(),
+                Chords = new List<JianpuChord>(),
                 LyricText = " "
             };
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using JianpuEditor.Models;
 using JianpuEditor.Rendering;
 
@@ -62,6 +63,7 @@ namespace JianpuEditor.Services
 
             foreach (var measure in measures)
             {
+                MelodyChordService.NormalizeMeasure(measure);
                 total += GetMeasureDurationUnits(measure);
             }
 
@@ -94,7 +96,9 @@ namespace JianpuEditor.Services
             var measures = score.Measures ?? new List<JianpuMeasure>();
             for (var measureIndex = 0; measureIndex < measures.Count; measureIndex++)
             {
-                var notes = measures[measureIndex].MelodyNotes;
+                var measure = measures[measureIndex];
+                MelodyChordService.NormalizeMeasure(measure);
+                var notes = measure.MelodyNotes;
                 if (notes == null)
                 {
                     continue;
@@ -102,8 +106,8 @@ namespace JianpuEditor.Services
 
                 for (var noteIndex = 0; noteIndex < notes.Count; noteIndex++)
                 {
-                    var note = notes[noteIndex];
-                    var duration = JianpuRenderer.GetDurationUnits(note);
+                    var slotNote = notes[noteIndex];
+                    var duration = JianpuRenderer.GetDurationUnits(slotNote);
                     var position = new NotePosition(measureIndex, noteIndex);
 
                     if (suppressed.Contains(position))
@@ -112,22 +116,43 @@ namespace JianpuEditor.Services
                         continue;
                     }
 
-                    if (note.Type == NoteType.Rest || !JianpuPitchCodec.IsValidMelodyPitch(note))
+                    var chordNotes = MelodyChordService.GetNotesAtSlot(measure, noteIndex);
+                    var playableNotes = chordNotes
+                        .Where(note => note.Type == NoteType.Note && JianpuPitchCodec.IsValidMelodyPitch(note))
+                        .ToList();
+                    if (playableNotes.Count == 0)
                     {
                         quarterTime += duration;
                         continue;
                     }
 
                     var totalDuration = duration + GetTieExtension(score, position, tieExtensionCache);
-                    events.AddRange(OrnamentPlaybackService.ScheduleMelodyNote(
-                        measures[measureIndex],
-                        note,
-                        noteIndex,
-                        quarterTime,
-                        totalDuration,
-                        tonicMidi,
-                        MelodyChannel,
-                        MelodyVelocity));
+                    if (playableNotes.Count == 1)
+                    {
+                        events.AddRange(OrnamentPlaybackService.ScheduleMelodyNote(
+                            measure,
+                            playableNotes[0],
+                            noteIndex,
+                            quarterTime,
+                            totalDuration,
+                            tonicMidi,
+                            MelodyChannel,
+                            MelodyVelocity));
+                    }
+                    else
+                    {
+                        foreach (var note in playableNotes)
+                        {
+                            events.Add(new ScheduledMidiNote
+                            {
+                                StartQuarter = quarterTime,
+                                DurationQuarter = totalDuration,
+                                MidiNote = ToMelodyMidiNote(note, tonicMidi),
+                                Channel = MelodyChannel,
+                                Velocity = MelodyVelocity
+                            });
+                        }
+                    }
 
                     quarterTime += duration;
                 }
@@ -251,58 +276,13 @@ namespace JianpuEditor.Services
 
         private static int ParseTonicMidi(string keySignature)
         {
-            if (string.IsNullOrWhiteSpace(keySignature))
+            if (!KeySignatureService.TryParseTonicPitchClass(keySignature, out var pitchClass))
             {
                 return DefaultTonicMidi;
             }
 
-            var text = keySignature.Trim();
-            var equalIndex = text.IndexOf('=');
-            if (equalIndex >= 0)
-            {
-                text = text.Substring(equalIndex + 1).Trim();
-            }
-
-            text = text.Replace("大调", string.Empty)
-                .Replace("小调", string.Empty)
-                .Replace("major", string.Empty)
-                .Replace("Major", string.Empty)
-                .Replace("minor", string.Empty)
-                .Replace("Minor", string.Empty)
-                .Trim();
-
-            if (text.Length == 0)
-            {
-                return DefaultTonicMidi;
-            }
-
-            var accidental = 0;
-            if (text.StartsWith("#", StringComparison.Ordinal) || text.StartsWith("＃", StringComparison.Ordinal))
-            {
-                accidental = 1;
-                text = text.Substring(1);
-            }
-            else if (text.StartsWith("b", StringComparison.OrdinalIgnoreCase) || text.StartsWith("♭", StringComparison.Ordinal))
-            {
-                accidental = -1;
-                text = text.Substring(1);
-            }
-
-            var letter = char.ToUpperInvariant(text[0]);
-            int baseMidi;
-            switch (letter)
-            {
-                case 'C': baseMidi = 60; break;
-                case 'D': baseMidi = 62; break;
-                case 'E': baseMidi = 64; break;
-                case 'F': baseMidi = 65; break;
-                case 'G': baseMidi = 67; break;
-                case 'A': baseMidi = 69; break;
-                case 'B': baseMidi = 71; break;
-                default: return DefaultTonicMidi;
-            }
-
-            return Math.Max(0, Math.Min(127, baseMidi + accidental));
+            var octaveBase = DefaultTonicMidi - (DefaultTonicMidi % 12);
+            return Math.Max(0, Math.Min(127, octaveBase + pitchClass));
         }
 
         private readonly struct NotePosition : IEquatable<NotePosition>

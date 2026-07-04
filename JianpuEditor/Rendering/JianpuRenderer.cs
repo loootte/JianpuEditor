@@ -1223,6 +1223,7 @@ namespace JianpuEditor.Rendering
             var minDrawWidth = melodyScale < 0.999
                 ? Math.Max(6, (int)Math.Round(MinNoteWidth * melodyScale))
                 : MinNoteWidth;
+            MelodyChordService.NormalizeMeasure(measure);
             var noteCount = measure.MelodyNotes.Count;
             for (var i = 0; i < noteCount; i++)
             {
@@ -1231,15 +1232,33 @@ namespace JianpuEditor.Rendering
                     : layout.MeasureIndex == selectedMeasureIndex && i == selectedNoteIndex;
                 GetNoteDrawBounds(layout, i, noteCount, melodyScale, minDrawWidth, out var noteX, out var noteWidth);
 
-                DrawNote(
-                    g,
-                    measure,
-                    i,
-                    measure.MelodyNotes[i],
-                    noteX,
-                    layout.BlockTop,
-                    noteWidth,
-                    isSelected);
+                var slotNotes = MelodyChordService.GetNotesAtSlot(measure, i);
+                var melodyNotes = slotNotes.Where(note => note.Type == NoteType.Note).ToList();
+                if (melodyNotes.Count > 1)
+                {
+                    DrawSimultaneousNotes(
+                        g,
+                        measure,
+                        i,
+                        melodyNotes,
+                        measure.MelodyNotes[i],
+                        noteX,
+                        layout.BlockTop,
+                        noteWidth,
+                        isSelected);
+                }
+                else
+                {
+                    DrawNote(
+                        g,
+                        measure,
+                        i,
+                        measure.MelodyNotes[i],
+                        noteX,
+                        layout.BlockTop,
+                        noteWidth,
+                        isSelected);
+                }
             }
 
             DrawBeatGroupUnderlines(g, measure, layout, melodyScale, minDrawWidth);
@@ -1879,6 +1898,70 @@ namespace JianpuEditor.Rendering
         }
 
         private const float CompactAccidentalFontSize = 10f;
+
+        private void DrawSimultaneousNotes(
+            Graphics g,
+            JianpuMeasure measure,
+            int noteIndex,
+            IReadOnlyList<JianpuNote> melodyNotes,
+            JianpuNote durationNote,
+            int x,
+            int y,
+            int noteWidth,
+            bool isSelected)
+        {
+            var headWidth = Math.Min(NoteCellWidth, noteWidth);
+            if (isSelected)
+            {
+                using (var brush = new SolidBrush(Color.FromArgb(90, 255, 214, 102)))
+                {
+                    g.FillRectangle(brush, x + 2, y + 2, noteWidth - 4, MelodyRowHeight - 4);
+                }
+
+                using (var pen = new Pen(Color.FromArgb(220, 180, 60), 2f))
+                {
+                    g.DrawRectangle(pen, x + 2, y + 2, noteWidth - 4, MelodyRowHeight - 4);
+                }
+            }
+
+            using (var ink = CreateInkBrush())
+            using (var inkPen = CreateInkPen(2f))
+            using (var chordFont = new Font(_noteFont.FontFamily, Math.Max(8f, _noteFont.Size * 0.72f), _noteFont.Style))
+            {
+                var count = melodyNotes.Count;
+                var lineHeight = 14f;
+                var blockHeight = count * lineHeight;
+                var startY = y + 18f + Math.Max(0f, (36f - blockHeight) / 2f);
+                var headCenterX = x + headWidth / 2f;
+
+                for (var i = 0; i < count; i++)
+                {
+                    var note = melodyNotes[i];
+                    var text = JianpuPitchCodec.GetPitchDisplayText(note);
+                    var textSize = g.MeasureString(text, chordFont);
+                    var textX = x + (headWidth - textSize.Width) / 2f;
+                    var textY = startY + i * lineHeight;
+                    g.DrawString(text, chordFont, ink, textX, textY);
+
+                    if (note.Octave > 0)
+                    {
+                        for (var dot = 0; dot < note.Octave; dot++)
+                        {
+                            g.FillEllipse(ink, textX + textSize.Width + 2, textY - 2 + dot * 6, 4, 4);
+                        }
+                    }
+                    else if (note.Octave < 0)
+                    {
+                        for (var dot = 0; dot < Math.Abs(note.Octave); dot++)
+                        {
+                            g.FillEllipse(ink, textX + textSize.Width + 2, textY + 10 + dot * 6, 4, 4);
+                        }
+                    }
+                }
+
+                DrawNoteDottedAndDashes(g, durationNote, x, y, noteWidth, headWidth, headCenterX, ink, inkPen);
+            }
+        }
 
         private void DrawNote(
             Graphics g,

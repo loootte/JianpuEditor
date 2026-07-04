@@ -7,6 +7,10 @@
 ## 功能
 
 - **主旋律编辑**：输入音符 1–7、休止符 0，点击音符间隙插入
+- **同时音 / 和弦音（v1.3 #57）**
+  - 同一拍位可包含多个旋律音符（如 MIDI 导入的和弦音）
+  - 画布垂直堆叠显示；播放与 MIDI 导出同时发声
+  - JSON 以 `Chords[]` 存储；旧谱面仅含 `MelodyNotes` 时打开自动迁移
 - **多选音符**
   - **Ctrl + 左键**：增选 / 减选单个音符
   - **Shift + 左键**：从锚点到当前音符范围批量增选 / 减选（可跨小节）
@@ -72,7 +76,8 @@
   - 速度由 BPM 控制（与谱面「速度」文字独立）
 - **MIDI 导入（Spike）**
   - **文件 → 导入 MIDI... (Spike)**：从 `.mid` 生成可编辑简谱
-  - 自动检测调号、十六分音符量化、4/4 小节规范化（拆分过长小节、补齐休止符）
+  - 自动检测调号（含 `1=B` 等）、十六分音符量化、4/4 小节规范化（拆分过长小节、补齐休止符）
+  - 同一时刻的多个音符合并为同时音槽位，不再丢失和弦音
   - 半音音高映射为 `.5` 表示（如 `1.5` = `#1`，`2.5` = `b3`），画布 / 播放 / MIDI 导出保持一致
 - **谱面播放**
   - 工具栏「播放 / 停止」，按 BPM 实时播放主旋律与和弦
@@ -201,21 +206,22 @@ git push origin v1.2.0
 曲谱保存为 JSON（`.json` / `.jianpu`），主要字段：
 
 - `Title`、`KeySignature`、`Tempo`、`Bpm`、`Composer`
-- `Measures[]`：每小节含 `MelodyNotes`、`ChordMarkers`、`LyricText`、`LyricSyllables`、`Ornaments`
+- `Measures[]`：每小节含 `MelodyNotes`、`Chords`、`ChordMarkers`、`LyricText`、`LyricSyllables`、`Ornaments`
 - `Ties[]`：连音线（起始/结束小节与音符索引）
 
 小节字段说明：
 
 | 字段 | 说明 |
 |------|------|
-| `MelodyNotes[]` | 主旋律音符；`Pitch` 为 `1`–`7` 或 `1.5` / `2.5` 等半音（配合 `Accidental`） |
-| `ChordMarkers[]` | `{ "Text": "C", "BeatPosition": 0 }` |
+| `MelodyNotes[]` | 主旋律槽位（每拍一个主音视图）；`Pitch` 为 `1`–`7` 或 `1.5` / `2.5` 等半音（配合 `Accidental`） |
+| `Chords[]` | 同时音槽位：`{ "BeatPosition": 0, "Notes": [ ... ], "Text": "" }`；`Notes` 可含多个同时发声的音符 |
+| `ChordMarkers[]` | `{ "Text": "C", "BeatPosition": 0 }`（副旋律行和弦符号，与 `Chords` 不同） |
 | `LyricText` | 歌词整行文本 |
 | `LyricSyllables[]` | 逐音节歌词，`{ "Text": "你", "NoteIndex": 0, "BeatPosition": 0 }`；有数据时画布按音符逐字绘制 |
 | `Ornaments[]` | 装饰音，`{ "Type": "Trill", "NoteIndex": 0, "BeatPosition": 0 }`；`Type` 为枚举名（如 `GraceNote`、`Trill`、`Turn`、`Fermata`） |
 | `Pitch` / `Accidental` | 自然音 `Pitch: 3`；半音如 `Pitch: 1.5, Accidental: "Sharp"`（显示 `#1`）或 `Pitch: 2.5, Accidental: "Flat"`（显示 `b3`） |
 
-打开旧谱面时，若仅有 `LyricText` 而无 `LyricSyllables`，仍按整行显示；执行重新对齐或批量编辑并勾选对齐后，会生成音节数据。无 `Ornaments` 字段的旧文件可正常打开。
+打开旧谱面时，若仅有 `LyricText` 而无 `LyricSyllables`，仍按整行显示；执行重新对齐或批量编辑并勾选对齐后，会生成音节数据。无 `Ornaments` 或 `Chords` 字段的旧文件可正常打开；加载时 `MelodyChordService` 会将 `MelodyNotes` 自动迁移为 `Chords`。
 
 `Tempo` 为谱面显示用语（如「中速」），`Bpm` 为播放与 MIDI 使用的每分钟拍数（默认 120）。
 
@@ -240,7 +246,7 @@ git push origin v1.2.0
 | **ViewModel** | `ViewModels/` | 编辑命令、谱面状态、选择协调；通过 `IAppMessenger` 发布 `ScoreEditedMessage` 等 |
 | **Model** | `Models/` | 纯 POCO：`JianpuScore`、小节、音符、和弦标识 |
 | **Core** | `Core/Abstractions/`、`Core/Messaging/` | 服务接口（`IScoreFileService`、`IScoreUndoService`、`IPdfExportService` 等）与消息总线 |
-| **Services** | `Services/` | 静态业务实现 + DI 适配器；含 `EditCommandHistory`（撤回 / 重做）、`OrnamentService`、`OrnamentPlaybackService`、`LyricAlignmentService`、`BulkLyricEditService`、`NoteSplitMergeService`、`JianpuPitchService` 等 |
+| **Services** | `Services/` | 静态业务实现 + DI 适配器；含 `MelodyChordService`（同时音槽位与迁移）、`EditCommandHistory`（撤回 / 重做）、`OrnamentService`、`OrnamentPlaybackService`、`LyricAlignmentService`、`BulkLyricEditService`、`NoteSplitMergeService`、`JianpuPitchService` 等 |
 | **Rendering** | `Rendering/` | 布局、绘制、`AppTheme`（浅色/深色主题） |
 
 **数据流**：用户操作 → `MainForm` 调用 ViewModel 方法 → 返回 `ScoreEditResult` → `ScoreCanvasGlue` 更新画布 → `MainFormViewBinder` 同步控件。
@@ -265,7 +271,7 @@ JianpuEditor/
   installer/               # Inno Setup 安装脚本
   scripts/                 # 构建与测试脚本
   sample/                  # 示例曲库（.jianpu / .json）
-JianpuEditor.Tests/        # xUnit 单元测试（218 个；服务、ViewModel、Glue、绘制）
+JianpuEditor.Tests/        # xUnit 单元测试（248 个；服务、ViewModel、Glue、绘制）
 ```
 
 ## 依赖

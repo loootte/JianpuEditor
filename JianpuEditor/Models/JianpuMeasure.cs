@@ -8,6 +8,8 @@ namespace JianpuEditor.Models
 
         public List<JianpuNote> MelodyNotes { get; set; } = new List<JianpuNote>();
 
+        public List<JianpuChord> Chords { get; set; } = new List<JianpuChord>();
+
         public List<ChordMarker> ChordMarkers { get; set; } = new List<ChordMarker>();
 
         public List<LyricSyllable> LyricSyllables { get; set; } = new List<LyricSyllable>();

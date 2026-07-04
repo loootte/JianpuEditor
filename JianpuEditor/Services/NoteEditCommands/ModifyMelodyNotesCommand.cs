@@ -60,6 +60,7 @@ namespace JianpuEditor.Services.NoteEditCommands
         public void Execute()
         {
             _apply();
+            SyncAffectedMeasures();
             PublishEdit();
         }
 
@@ -82,8 +83,24 @@ namespace JianpuEditor.Services.NoteEditCommands
                 NoteEditState.CopyNoteProperties(notes[backup.NoteIndex], backup.Note);
             }
 
+            SyncAffectedMeasures();
             _messenger.Send(new ScoreEditedMessage("已撤回: " + Description));
             Result = BuildResult("已撤回: " + Description);
+        }
+
+        private void SyncAffectedMeasures()
+        {
+            var synced = new HashSet<int>();
+            for (var i = 0; i < _backups.Count; i++)
+            {
+                var measureIndex = _backups[i].MeasureIndex;
+                if (measureIndex < 0 || measureIndex >= _score.Measures.Count || !synced.Add(measureIndex))
+                {
+                    continue;
+                }
+
+                MelodyChordService.SyncChordsFromMelodyNotes(_score.Measures[measureIndex]);
+            }
         }
 
         private void PublishEdit()

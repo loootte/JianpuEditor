@@ -112,7 +112,7 @@ namespace JianpuEditor.ViewModels
                                 continue;
                             }
 
-                            targetMeasure.MelodyNotes.RemoveAt(noteIndex);
+                            MelodyChordService.RemoveSlot(targetMeasure, noteIndex);
                             TieMaintenanceService.OnNoteRemoved(_document.Score, group.Key, noteIndex);
                             OrnamentService.OnNoteRemoved(targetMeasure, noteIndex);
                             removedCount++;
@@ -138,7 +138,7 @@ namespace JianpuEditor.ViewModels
             if (measure.MelodyNotes.Count > 0)
             {
                 var noteIndex = measure.MelodyNotes.Count - 1;
-                measure.MelodyNotes.RemoveAt(noteIndex);
+                MelodyChordService.RemoveSlot(measure, noteIndex);
                 TieMaintenanceService.OnNoteRemoved(_document.Score, measureIndex, noteIndex);
                 OrnamentService.OnNoteRemoved(measure, noteIndex);
                 return new ScoreEditResult
