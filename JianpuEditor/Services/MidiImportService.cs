@@ -44,6 +44,7 @@ namespace JianpuEditor.Services
             var tonicMidi = DetectTonicMidi(notes);
             var keySignature = "1=" + TonicNames[tonicMidi % 12];
             var measures = BuildMeasures(notes, tonicMidi, ScoreMidiSchedule.DefaultMeasureBeats);
+            measures = MeasureNormalizationService.NormalizeMeasures(measures, ScoreMidiSchedule.DefaultMeasureBeats);
 
             return new JianpuScore
             {
@@ -146,7 +147,7 @@ namespace JianpuEditor.Services
                 var score = 0;
                 foreach (var note in notes)
                 {
-                    if (TryMidiToJianpu(note.MidiNote, 60 + tonic, out _, out _, out var error))
+                    if (TryMidiToJianpu(note.MidiNote, 60 + tonic, out _, out _, out _, out var error))
                     {
                         score += Math.Max(0, 3 - error);
                     }
@@ -179,12 +180,18 @@ namespace JianpuEditor.Services
                     AppendRests(current, note.StartQuarter - cursor, ref measureStart, measureBeats, measures, ref current, ref cursor);
                 }
 
-                if (!TryMidiToJianpu(note.MidiNote, tonicMidi, out var pitch, out var octave, out _))
+                if (!TryMidiToJianpu(
+                        note.MidiNote,
+                        tonicMidi,
+                        out var pitch,
+                        out var octave,
+                        out var accidental,
+                        out _))
                 {
                     continue;
                 }
 
-                var jianpuNote = CreateNote(pitch, octave, note.DurationQuarter);
+                var jianpuNote = CreateNote(pitch, accidental, octave, note.DurationQuarter);
                 if (jianpuNote == null)
                 {
                     continue;
@@ -257,12 +264,17 @@ namespace JianpuEditor.Services
             };
         }
 
-        private static JianpuNote CreateNote(int pitch, int octave, double durationUnits)
+        private static JianpuNote CreateNote(
+            double pitch,
+            AccidentalKind accidental,
+            int octave,
+            double durationUnits)
         {
             var note = new JianpuNote
             {
                 Type = NoteType.Note,
                 Pitch = pitch,
+                Accidental = accidental,
                 Octave = octave
             };
             return ApplyDurationUnits(note, durationUnits) ? note : null;
@@ -277,14 +289,22 @@ namespace JianpuEditor.Services
         internal static bool TryMidiToJianpu(
             int midiNote,
             int tonicMidi,
-            out int pitch,
+            out double pitch,
             out int octave,
+            out AccidentalKind accidental,
             out int semitoneError)
         {
             pitch = 1;
             octave = 0;
+            accidental = AccidentalKind.None;
             semitoneError = 127;
             var bestError = 127;
+            var bestDegree = 1;
+            var bestCandidate = tonicMidi;
+            int? sharpDegree = null;
+            var sharpOctave = 0;
+            int? flatDegree = null;
+            var flatOctave = 0;
 
             for (var octaveDot = -1; octaveDot <= 1; octaveDot++)
             {
@@ -295,14 +315,89 @@ namespace JianpuEditor.Services
                     if (error < bestError)
                     {
                         bestError = error;
-                        pitch = degree;
+                        bestDegree = degree;
+                        bestCandidate = candidate;
                         octave = octaveDot;
                         semitoneError = error;
+                        sharpDegree = null;
+                        flatDegree = null;
+                    }
+
+                    if (error != 1)
+                    {
+                        continue;
+                    }
+
+                    if (midiNote > candidate)
+                    {
+                        sharpDegree = degree;
+                        sharpOctave = octaveDot;
+                    }
+                    else if (midiNote < candidate)
+                    {
+                        flatDegree = degree;
+                        flatOctave = octaveDot;
                     }
                 }
             }
 
-            return bestError <= 1;
+            if (bestError == 0)
+            {
+                pitch = bestDegree;
+                accidental = AccidentalKind.None;
+                return true;
+            }
+
+            if (bestError == 1)
+            {
+                if (sharpDegree.HasValue && flatDegree.HasValue)
+                {
+                    var lowerDegree = Math.Min(sharpDegree.Value, flatDegree.Value - 1);
+                    if (PreferFlatAccidental(lowerDegree))
+                    {
+                        accidental = AccidentalKind.Flat;
+                        pitch = (flatDegree.Value - 1) + JianpuPitchCodec.AccidentalFraction;
+                        octave = flatOctave;
+                    }
+                    else
+                    {
+                        accidental = AccidentalKind.Sharp;
+                        pitch = sharpDegree.Value + JianpuPitchCodec.AccidentalFraction;
+                        octave = sharpOctave;
+                    }
+                }
+                else if (sharpDegree.HasValue)
+                {
+                    accidental = AccidentalKind.Sharp;
+                    pitch = sharpDegree.Value + JianpuPitchCodec.AccidentalFraction;
+                    octave = sharpOctave;
+                }
+                else if (flatDegree.HasValue)
+                {
+                    accidental = AccidentalKind.Flat;
+                    pitch = (flatDegree.Value - 1) + JianpuPitchCodec.AccidentalFraction;
+                    octave = flatOctave;
+                }
+                else if (midiNote > bestCandidate)
+                {
+                    accidental = AccidentalKind.Sharp;
+                    pitch = bestDegree + JianpuPitchCodec.AccidentalFraction;
+                }
+                else
+                {
+                    accidental = AccidentalKind.Flat;
+                    pitch = (bestDegree - 1) + JianpuPitchCodec.AccidentalFraction;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool PreferFlatAccidental(int lowerDegree)
+        {
+            return lowerDegree == 2 || lowerDegree == 4 || lowerDegree == 6;
         }
 
         internal static bool ApplyDurationUnits(JianpuNote note, double units)

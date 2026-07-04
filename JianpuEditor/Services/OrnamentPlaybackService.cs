@@ -112,7 +112,7 @@ namespace JianpuEditor.Services
                 };
             }
 
-            var upper = WithPitch(note, UpperDiatonicPitch(note.Pitch));
+            var upper = WithPitch(note, UpperDiatonicPitch(JianpuPitchCodec.GetDisplayDegree(note)));
             var segmentDuration = durationQuarter / segmentCount;
             var events = new List<ScheduledMidiNote>(segmentCount);
             for (var i = 0; i < segmentCount; i++)
@@ -140,9 +140,9 @@ namespace JianpuEditor.Services
         {
             var pattern = new[]
             {
-                WithPitch(note, UpperDiatonicPitch(note.Pitch)),
+                WithPitch(note, UpperDiatonicPitch(JianpuPitchCodec.GetDisplayDegree(note))),
                 note,
-                WithPitch(note, LowerDiatonicPitch(note.Pitch)),
+                WithPitch(note, LowerDiatonicPitch(JianpuPitchCodec.GetDisplayDegree(note))),
                 note
             };
             return BuildPattern(pattern, startQuarter, durationQuarter, tonicMidi, channel, velocity);
@@ -159,7 +159,7 @@ namespace JianpuEditor.Services
             var pattern = new[]
             {
                 note,
-                WithPitch(note, LowerDiatonicPitch(note.Pitch)),
+                WithPitch(note, LowerDiatonicPitch(JianpuPitchCodec.GetDisplayDegree(note))),
                 note
             };
             return BuildPattern(pattern, startQuarter, durationQuarter, tonicMidi, channel, velocity);
@@ -221,23 +221,24 @@ namespace JianpuEditor.Services
             var direction = OrnamentService.GetParameter(ornament, OrnamentService.ParamDirection);
             if (string.Equals(direction, "up", StringComparison.OrdinalIgnoreCase))
             {
-                return UpperDiatonicPitch(main.Pitch);
+                return UpperDiatonicPitch(JianpuPitchCodec.GetDisplayDegree(main));
             }
 
-            return LowerDiatonicPitch(main.Pitch);
+            return LowerDiatonicPitch(JianpuPitchCodec.GetDisplayDegree(main));
         }
 
         private static JianpuNote WithPitch(JianpuNote source, int pitch)
         {
-            return new JianpuNote
+            var note = new JianpuNote
             {
                 Type = NoteType.Note,
-                Pitch = pitch,
                 Octave = source.Octave,
                 Dashes = 0,
                 Underlines = 0,
                 Dotted = false
             };
+            JianpuPitchCodec.SetNaturalPitch(note, pitch);
+            return note;
         }
 
         private static int UpperDiatonicPitch(int pitch)

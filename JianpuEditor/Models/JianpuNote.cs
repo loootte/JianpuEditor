@@ -10,8 +10,11 @@ namespace JianpuEditor.Models
     {
         public NoteType Type { get; set; } = NoteType.Note;
 
-        /// <summary>0 = rest, 1-7 = pitch.</summary>
-        public int Pitch { get; set; } = 1;
+        /// <summary>0 = rest, 1-7 = natural pitch, 1.5 / 2.5 = chromatic (.5 + Accidental).</summary>
+        public double Pitch { get; set; } = 1;
+
+        /// <summary>Sharp / flat spelling for .5 pitches (#1, b3).</summary>
+        public AccidentalKind Accidental { get; set; }
 
         /// <summary>-1 = low octave dot, 0 = normal, 1 = high octave dot.</summary>
         public int Octave { get; set; }

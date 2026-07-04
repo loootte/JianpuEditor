@@ -1,3 +1,4 @@
+using System;
 using JianpuEditor.Models;
 
 namespace JianpuEditor.Services
@@ -16,12 +17,17 @@ namespace JianpuEditor.Services
                 return false;
             }
 
-            if (!TryGetTransposedPitch(note.Pitch, note.Octave, delta, out var newPitch, out var newOctave))
+            if (!JianpuPitchCodec.IsNatural(note.Pitch) || note.Accidental != AccidentalKind.None)
             {
                 return false;
             }
 
-            note.Pitch = newPitch;
+            if (!TryGetTransposedPitch((int)Math.Round(note.Pitch), note.Octave, delta, out var newPitch, out var newOctave))
+            {
+                return false;
+            }
+
+            JianpuPitchCodec.SetNaturalPitch(note, newPitch);
             note.Octave = newOctave;
             return true;
         }

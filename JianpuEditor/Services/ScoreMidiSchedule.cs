@@ -112,7 +112,7 @@ namespace JianpuEditor.Services
                         continue;
                     }
 
-                    if (note.Type == NoteType.Rest || note.Pitch < 1 || note.Pitch > 7)
+                    if (note.Type == NoteType.Rest || !JianpuPitchCodec.IsValidMelodyPitch(note))
                     {
                         quarterTime += duration;
                         continue;
@@ -246,13 +246,7 @@ namespace JianpuEditor.Services
 
         public static int ToMelodyMidiNote(JianpuNote note, int tonicMidi)
         {
-            if (note == null || note.Type == NoteType.Rest || note.Pitch < 1 || note.Pitch > 7)
-            {
-                return tonicMidi;
-            }
-
-            var midi = tonicMidi + MajorScaleOffsets[note.Pitch - 1] + note.Octave * 12;
-            return Math.Max(0, Math.Min(127, midi));
+            return JianpuPitchCodec.ToMelodyMidiNote(note, tonicMidi);
         }
 
         private static int ParseTonicMidi(string keySignature)

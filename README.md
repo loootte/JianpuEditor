@@ -64,6 +64,10 @@
   - 主旋律按简谱时值与调号导出；装饰音展开为额外 MIDI 音符或延长时值
   - 和弦按拍位起止时间导出柱式和弦（如 `D`、`Bm7`、`G/D`）
   - 速度由 BPM 控制（与谱面「速度」文字独立）
+- **MIDI 导入（Spike）**
+  - **文件 → 导入 MIDI... (Spike)**：从 `.mid` 生成可编辑简谱
+  - 自动检测调号、十六分音符量化、4/4 小节规范化（拆分过长小节、补齐休止符）
+  - 半音音高映射为 `.5` 表示（如 `1.5` = `#1`，`2.5` = `b3`），画布 / 播放 / MIDI 导出保持一致
 - **谱面播放**
   - 工具栏「播放 / 停止」，按 BPM 实时播放主旋律与和弦
   - 可拖动蓝色进度条跳转；演奏逻辑与 MIDI 导出共用调度（含装饰音展开）
@@ -145,6 +149,7 @@ git push origin v1.2.0
 | 播放 / 停止 | 按 BPM 播放谱面；拖动蓝色进度条可跳转 |
 | 转调 | 菜单「编辑 → 和弦转调...」；仅转调和弦标识 |
 | 导出 PDF / MIDI | 菜单「文件」导出 |
+| 导入 MIDI | **文件 → 导入 MIDI... (Spike)** |
 | 深色模式 | 菜单 **视图 → 深色模式**（设置会保存到本地，PDF 导出仍为浅色纸面） |
 
 启动后自动加载《欢乐颂》示例曲谱。`sample/` 目录提供更多示例（如《卡农》），可通过 **文件 → 示例曲库** 或工具栏 **曲库** 加载。
@@ -197,11 +202,12 @@ git push origin v1.2.0
 
 | 字段 | 说明 |
 |------|------|
-| `MelodyNotes[]` | 主旋律音符 |
+| `MelodyNotes[]` | 主旋律音符；`Pitch` 为 `1`–`7` 或 `1.5` / `2.5` 等半音（配合 `Accidental`） |
 | `ChordMarkers[]` | `{ "Text": "C", "BeatPosition": 0 }` |
 | `LyricText` | 歌词整行文本 |
 | `LyricSyllables[]` | 逐音节歌词，`{ "Text": "你", "NoteIndex": 0, "BeatPosition": 0 }`；有数据时画布按音符逐字绘制 |
 | `Ornaments[]` | 装饰音，`{ "Type": "Trill", "NoteIndex": 0, "BeatPosition": 0 }`；`Type` 为枚举名（如 `GraceNote`、`Trill`、`Turn`、`Fermata`） |
+| `Pitch` / `Accidental` | 自然音 `Pitch: 3`；半音如 `Pitch: 1.5, Accidental: "Sharp"`（显示 `#1`）或 `Pitch: 2.5, Accidental: "Flat"`（显示 `b3`） |
 
 打开旧谱面时，若仅有 `LyricText` 而无 `LyricSyllables`，仍按整行显示；执行重新对齐或批量编辑并勾选对齐后，会生成音节数据。无 `Ornaments` 字段的旧文件可正常打开。
 
@@ -253,7 +259,7 @@ JianpuEditor/
   installer/               # Inno Setup 安装脚本
   scripts/                 # 构建与测试脚本
   sample/                  # 示例曲库（.jianpu / .json）
-JianpuEditor.Tests/        # xUnit 单元测试（199 个；服务、ViewModel、Glue、绘制）
+JianpuEditor.Tests/        # xUnit 单元测试（212 个；服务、ViewModel、Glue、绘制）
 ```
 
 ## 依赖
