@@ -96,19 +96,35 @@ namespace JianpuEditor.Tests.ViewModels
                 history ?? CreateHistory(messenger));
         }
 
+        public static OrnamentEditorViewModel CreateOrnamentEditor(
+            ScoreDocumentViewModel document,
+            ScoreSelectionViewModel selection,
+            IAppMessenger messenger,
+            IEditCommandHistory history = null)
+        {
+            return new OrnamentEditorViewModel(
+                document,
+                selection,
+                history ?? CreateHistory(messenger),
+                messenger);
+        }
+
         public static ScoreEditorViewModel CreateScoreEditor(
             ScoreDocumentViewModel document,
             ScoreSelectionViewModel selection,
             MeasureNavigationViewModel navigation,
             ChordEditorViewModel chordEditor,
             IAppMessenger messenger,
-            IEditCommandHistory history = null)
+            IEditCommandHistory history = null,
+            OrnamentEditorViewModel ornamentEditor = null)
         {
+            ornamentEditor = ornamentEditor ?? CreateOrnamentEditor(document, selection, messenger, history);
             return new ScoreEditorViewModel(
                 document,
                 selection,
                 navigation,
                 chordEditor,
+                ornamentEditor,
                 messenger,
                 history ?? CreateHistory(messenger));
         }
@@ -130,11 +146,13 @@ namespace JianpuEditor.Tests.ViewModels
                 new ChordTransposeServiceAdapter(),
                 history,
                 messenger);
+            var ornamentEditor = new OrnamentEditorViewModel(document, selection, history, messenger);
             var scoreEditor = new ScoreEditorViewModel(
                 document,
                 selection,
                 measureNavigation,
                 chordEditor,
+                ornamentEditor,
                 messenger,
                 history);
             var playback = new PlaybackViewModel(document, new FakePlaybackService(), messenger);
@@ -147,6 +165,7 @@ namespace JianpuEditor.Tests.ViewModels
                 measureNavigation,
                 measureContent,
                 chordEditor,
+                ornamentEditor,
                 scoreEditor,
                 playback,
                 sampleLibrary,
@@ -174,11 +193,13 @@ namespace JianpuEditor.Tests.ViewModels
                 new ChordTransposeServiceAdapter(),
                 history,
                 messenger);
+            var ornamentEditor = new OrnamentEditorViewModel(document, selection, history, messenger);
             var scoreEditor = new ScoreEditorViewModel(
                 document,
                 selection,
                 measureNavigation,
                 chordEditor,
+                ornamentEditor,
                 messenger,
                 history);
             var playback = new PlaybackViewModel(document, new FakePlaybackService(), messenger);
@@ -191,6 +212,7 @@ namespace JianpuEditor.Tests.ViewModels
                 measureNavigation,
                 measureContent,
                 chordEditor,
+                ornamentEditor,
                 scoreEditor,
                 playback,
                 sampleLibrary,

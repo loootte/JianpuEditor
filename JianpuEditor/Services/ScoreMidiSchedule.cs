@@ -119,14 +119,15 @@ namespace JianpuEditor.Services
                     }
 
                     var totalDuration = duration + GetTieExtension(score, position, tieExtensionCache);
-                    events.Add(new ScheduledMidiNote
-                    {
-                        StartQuarter = quarterTime,
-                        DurationQuarter = Math.Max(0.01, totalDuration),
-                        MidiNote = ToMidiNoteNumber(note, tonicMidi),
-                        Channel = MelodyChannel,
-                        Velocity = MelodyVelocity
-                    });
+                    events.AddRange(OrnamentPlaybackService.ScheduleMelodyNote(
+                        measures[measureIndex],
+                        note,
+                        noteIndex,
+                        quarterTime,
+                        totalDuration,
+                        tonicMidi,
+                        MelodyChannel,
+                        MelodyVelocity));
 
                     quarterTime += duration;
                 }
@@ -243,8 +244,13 @@ namespace JianpuEditor.Services
             return notes[noteIndex];
         }
 
-        private static int ToMidiNoteNumber(JianpuNote note, int tonicMidi)
+        public static int ToMelodyMidiNote(JianpuNote note, int tonicMidi)
         {
+            if (note == null || note.Type == NoteType.Rest || note.Pitch < 1 || note.Pitch > 7)
+            {
+                return tonicMidi;
+            }
+
             var midi = tonicMidi + MajorScaleOffsets[note.Pitch - 1] + note.Octave * 12;
             return Math.Max(0, Math.Min(127, midi));
         }

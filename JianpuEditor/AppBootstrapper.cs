@@ -30,6 +30,7 @@ namespace JianpuEditor
             services.AddSingleton<MeasureNavigationViewModel>();
             services.AddSingleton<MeasureContentViewModel>();
             services.AddSingleton<ChordEditorViewModel>();
+            services.AddSingleton<OrnamentEditorViewModel>();
             services.AddSingleton<ScoreEditorViewModel>();
             services.AddSingleton<PlaybackViewModel>();
             services.AddSingleton<SampleLibraryViewModel>();

@@ -17,6 +17,7 @@ namespace JianpuEditor.ViewModels
         private readonly ScoreSelectionViewModel _selection;
         private readonly MeasureNavigationViewModel _navigation;
         private readonly ChordEditorViewModel _chordEditor;
+        private readonly OrnamentEditorViewModel _ornamentEditor;
         private readonly IAppMessenger _messenger;
         private readonly IEditCommandHistory _history;
 
@@ -25,6 +26,7 @@ namespace JianpuEditor.ViewModels
             ScoreSelectionViewModel selection,
             MeasureNavigationViewModel navigation,
             ChordEditorViewModel chordEditor,
+            OrnamentEditorViewModel ornamentEditor,
             IAppMessenger messenger,
             IEditCommandHistory history)
         {
@@ -32,6 +34,7 @@ namespace JianpuEditor.ViewModels
             _selection = selection ?? throw new ArgumentNullException(nameof(selection));
             _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
             _chordEditor = chordEditor ?? throw new ArgumentNullException(nameof(chordEditor));
+            _ornamentEditor = ornamentEditor ?? throw new ArgumentNullException(nameof(ornamentEditor));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
             _history = history ?? throw new ArgumentNullException(nameof(history));
             DeleteCommand = new RelayCommand(() => Delete());
@@ -78,6 +81,12 @@ namespace JianpuEditor.ViewModels
                 return chordResult;
             }
 
+            var ornamentResult = _ornamentEditor.TryRemoveOrnamentsForSelection();
+            if (ornamentResult.Changed)
+            {
+                return ornamentResult;
+            }
+
             _document.EnsureMeasures();
             var measureIndex = Math.Max(0, _selection.MeasureIndex);
             var measure = _document.Score.Measures[measureIndex];
@@ -105,6 +114,7 @@ namespace JianpuEditor.ViewModels
 
                             targetMeasure.MelodyNotes.RemoveAt(noteIndex);
                             TieMaintenanceService.OnNoteRemoved(_document.Score, group.Key, noteIndex);
+                            OrnamentService.OnNoteRemoved(targetMeasure, noteIndex);
                             removedCount++;
                         }
                     }
@@ -130,6 +140,7 @@ namespace JianpuEditor.ViewModels
                 var noteIndex = measure.MelodyNotes.Count - 1;
                 measure.MelodyNotes.RemoveAt(noteIndex);
                 TieMaintenanceService.OnNoteRemoved(_document.Score, measureIndex, noteIndex);
+                OrnamentService.OnNoteRemoved(measure, noteIndex);
                 return new ScoreEditResult
                 {
                     Changed = true,
