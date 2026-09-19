@@ -1408,46 +1408,6 @@ namespace JianpuEditor.Rendering
             }
         }
 
-        private static List<List<int>> GroupNotesByQuarterBeat(List<JianpuNote> notes)
-        {
-            var groups = new List<List<int>>();
-            var current = new List<int>();
-            var sum = 0.0;
-
-            for (var i = 0; i < notes.Count; i++)
-            {
-                var duration = GetDurationUnits(notes[i]);
-                if (duration <= 0)
-                {
-                    duration = 1;
-                }
-
-                if (current.Count > 0 && sum + duration > 1.0001)
-                {
-                    groups.Add(current);
-                    current = new List<int>();
-                    sum = 0;
-                }
-
-                current.Add(i);
-                sum += duration;
-
-                if (sum >= 0.9999)
-                {
-                    groups.Add(current);
-                    current = new List<int>();
-                    sum = 0;
-                }
-            }
-
-            if (current.Count > 0)
-            {
-                groups.Add(current);
-            }
-
-            return groups;
-        }
-
         private void DrawBeatGroupUnderlines(
             Graphics g,
             JianpuMeasure measure,
@@ -1461,7 +1421,7 @@ namespace JianpuEditor.Rendering
                 return;
             }
 
-            var groups = GroupNotesByQuarterBeat(notes);
+            var groups = BeatGroupUnderlinePlanner.GroupNotesByQuarterBeat(notes);
             var rowTop = layout.BlockTop;
             var noteCount = notes.Count;
 
@@ -1485,33 +1445,29 @@ namespace JianpuEditor.Rendering
 
                 for (var underlineIndex = 0; underlineIndex < maxUnderlines; underlineIndex++)
                 {
-                    var spanStart = -1;
-                    var spanEnd = -1;
-                    foreach (var noteIndex in group)
+                    var spans = BeatGroupUnderlinePlanner.CollectSpans(group, notes, underlineIndex);
+                    foreach (var span in spans)
                     {
-                        if (notes[noteIndex].Underlines <= underlineIndex)
-                        {
-                            continue;
-                        }
-
-                        if (spanStart < 0)
-                        {
-                            spanStart = noteIndex;
-                        }
-
-                        spanEnd = noteIndex;
+                        GetNoteDrawBounds(
+                            layout,
+                            span.StartNoteIndex,
+                            noteCount,
+                            melodyScale,
+                            minDrawWidth,
+                            out var startX,
+                            out _);
+                        GetNoteDrawBounds(
+                            layout,
+                            span.EndNoteIndex,
+                            noteCount,
+                            melodyScale,
+                            minDrawWidth,
+                            out var endNoteX,
+                            out var endNoteWidth);
+                        var endX = endNoteX + endNoteWidth;
+                        var lineY = rowTop + 62 + underlineIndex * 6;
+                        g.DrawLine(Pens.Black, startX, lineY, endX, lineY);
                     }
-
-                    if (spanStart < 0 || spanEnd < 0)
-                    {
-                        continue;
-                    }
-
-                    GetNoteDrawBounds(layout, spanStart, noteCount, melodyScale, minDrawWidth, out var startX, out _);
-                    GetNoteDrawBounds(layout, spanEnd, noteCount, melodyScale, minDrawWidth, out var endNoteX, out var endNoteWidth);
-                    var endX = endNoteX + endNoteWidth;
-                    var lineY = rowTop + 62 + underlineIndex * 6;
-                    g.DrawLine(Pens.Black, startX, lineY, endX, lineY);
                 }
             }
         }
