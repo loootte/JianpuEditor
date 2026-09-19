@@ -948,7 +948,8 @@ namespace JianpuEditor.Rendering
                 if (startLayout == null
                     || endLayout == null
                     || !visibleMeasures.Contains(startLayout)
-                    || !visibleMeasures.Contains(endLayout))
+                    || !visibleMeasures.Contains(endLayout)
+                    || ShouldHideTieOnBlankRestMeasure(score, tie))
                 {
                     continue;
                 }
@@ -1047,7 +1048,8 @@ namespace JianpuEditor.Rendering
 
             for (var i = 0; i < score.Ties.Count; i++)
             {
-                if (!TryGetTieGeometry(score, layout, score.Ties[i], out var geometry))
+                if (ShouldHideTieOnBlankRestMeasure(score, score.Ties[i])
+                    || !TryGetTieGeometry(score, layout, score.Ties[i], out var geometry))
                 {
                     continue;
                 }
@@ -1093,6 +1095,26 @@ namespace JianpuEditor.Rendering
                         geometry.BaseY);
                 }
             }
+        }
+
+        private bool ShouldHideTieOnBlankRestMeasure(JianpuScore score, JianpuTie tie)
+        {
+            if (_activeLayoutOptions == null
+                || !_activeLayoutOptions.LeaveRestOnlyMeasuresBlank
+                || score?.Measures == null
+                || tie == null)
+            {
+                return false;
+            }
+
+            if (tie.StartMeasureIndex < 0 || tie.StartMeasureIndex >= score.Measures.Count
+                || tie.EndMeasureIndex < 0 || tie.EndMeasureIndex >= score.Measures.Count)
+            {
+                return false;
+            }
+
+            return MeasureRestService.IsRestOnly(score.Measures[tie.StartMeasureIndex])
+                || MeasureRestService.IsRestOnly(score.Measures[tie.EndMeasureIndex]);
         }
 
         private static bool TryGetTieGeometry(JianpuScore score, ScoreLayout layout, JianpuTie tie, out TieGeometry geometry)
@@ -1217,6 +1239,13 @@ namespace JianpuEditor.Rendering
             if (layout.MeasureIndex == selectedMeasureIndex && selectedInsertIndex >= 0)
             {
                 DrawGapCaret(g, layout, selectedInsertIndex);
+            }
+
+            if (_activeLayoutOptions != null
+                && _activeLayoutOptions.LeaveRestOnlyMeasuresBlank
+                && MeasureRestService.IsRestOnly(measure))
+            {
+                return;
             }
 
             var melodyScale = layout.MelodyScale;
