@@ -22,7 +22,8 @@ namespace JianpuEditor.Rendering
             HeaderMetaLeftAligned = true,
             ChordMarkersTextOnly = true,
             CompactAccidentalGlyphs = true,
-            RespectAppTheme = false
+            RespectAppTheme = false,
+            LeaveRestOnlyMeasuresBlank = true
         };
 
         public const int PdfRenderWidth = 1280;
@@ -54,5 +55,8 @@ namespace JianpuEditor.Rendering
 
         /// <summary>编辑器与 PDF：音符上方标注分层排布（升降号、高音点、装饰音纵向叠放）。</summary>
         public bool CompactAccidentalGlyphs { get; set; }
+
+        /// <summary>PDF：主旋律全为休止符 0 的小节留空，便于手写音符。</summary>
+        public bool LeaveRestOnlyMeasuresBlank { get; set; }
     }
 }
